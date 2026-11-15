@@ -1,0 +1,25 @@
+class Negi < Formula
+  desc "Phone remote for tmux and the Mac's screen, over your tailnet"
+  homepage "https://github.com/rifuki/negi"
+  url "https://github.com/rifuki/negi/releases/download/v@VERSION@/negi-@VERSION@-darwin-universal.tar.gz"
+  sha256 "@SHA256@"
+  license "MIT"
+
+  depends_on :macos
+  depends_on "tmux"
+
+  def install
+    bin.install "negi"
+  end
+
+  service do
+    run [opt_bin/"negi", "serve"]
+    keep_alive true
+    log_path var/"log/negi.log"
+    error_log_path var/"log/negi.log"
+  end
+
+  test do
+    assert_match "negi #{version}", shell_output("#{bin}/negi --version")
+  end
+end

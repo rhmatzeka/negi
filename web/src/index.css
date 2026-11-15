@@ -1,0 +1,522 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/sn-pro";
+
+/* A light and a dark theme; the terminal is dark in both. */
+@custom-variant dark (&:is(.dark *));
+
+@font-face {
+  font-family: "Pane Mono";
+  src: url("./assets/fonts/mono-regular.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Pane Mono";
+  src: url("./assets/fonts/mono-bold.woff2") format("woff2");
+  font-weight: 700;
+  font-display: swap;
+}
+
+@theme inline {
+  --font-sans: "SN Pro Variable", ui-rounded, system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-mono: "Pane Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* negi's own colours */
+  --color-soft: var(--soft);
+  --color-soft-strong: var(--soft-strong);
+  --color-glass: var(--glass);
+  --color-glass-edge: var(--glass-edge);
+  --color-busy: var(--busy);
+  --color-hero: var(--hero);
+  --color-hero-ink: var(--hero-ink);
+  --color-mint: var(--mint);
+  --color-mint-ink: var(--mint-ink);
+  --color-mint-soft: var(--mint-soft);
+  --color-term: var(--t-bg);
+  --color-term-fg: var(--t-fg);
+
+  /* Corners: keys and rows, insets, cards, hero and sheets. */
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+  --radius-xl: 32px;
+
+  /* Control heights: every button, key, chip and field is one of these. */
+  --spacing-ctl-sm: 36px;
+  --spacing-ctl: 44px;
+  --spacing-ctl-lg: 52px;
+
+  --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-spring: linear(
+    0, 0.009, 0.035 2.1%, 0.141 4.4%, 0.723 12.9%, 0.938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163,
+    1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, 0.991, 0.977 51%, 0.974 53.8%, 0.975 57.1%,
+    0.997 69.8%, 1.003 76.9%, 1.004 83.8%, 1
+  );
+
+  --animate-bob: bob 0.9s ease-in-out infinite;
+  --animate-floaty: floaty 5s ease-in-out infinite alternate;
+
+  @keyframes bob {
+    0%,
+    60%,
+    100% {
+      transform: translateY(0);
+    }
+    30% {
+      transform: translateY(-4px);
+    }
+  }
+  @keyframes floaty {
+    from {
+      translate: 0 -5px;
+    }
+    to {
+      translate: 0 6px;
+    }
+  }
+}
+
+:root {
+  color-scheme: light;
+  --radius: 24px;
+
+  /* Every colour here was sampled from one picture the owner chose: its teal, its sky
+     blue, its pink-red, its charcoal, its white. Each has one job. */
+  --background: #fcfdfd;
+  --foreground: #23272b;
+  --card: #f4f6f7;
+  --card-foreground: #23272b;
+  --popover: #ffffff;
+  --popover-foreground: #23272b;
+  --primary: #3c4045;
+  --primary-foreground: #fcfdfd;
+  --secondary: #eef1f2;
+  --secondary-foreground: #23272b;
+  --muted: #eef1f2;
+  --muted-foreground: #626a72;
+  --accent: #e1e5e7;
+  --accent-foreground: #23272b;
+  --destructive: #b74960;
+  --border: #e8ebed;
+  --input: #dde2e4;
+  --ring: #3f81e3;
+
+  --soft: #eef1f2;
+  --soft-strong: #e1e5e7;
+  --glass: rgb(255 255 255 / 0.96);
+  --glass-edge: #e8ebed;
+  --glass-shadow: 0 -8px 40px rgb(35 39 43 / 0.12);
+  --card-shadow: none;
+  /* Sky blue: the brand surface, the summary card and the mark's background. */
+  /* Dark enough for white text at 4.5:1, on the card and on the lighter discs behind it. */
+  --hero: #2b65c9;
+  --hero-ink: #ffffff;
+  /* The pills on the card. A tint of the ink, except where the ink is white: a white tint
+     would lighten the ground under white text, so there the pill is a shade. */
+  --hero-pill: rgb(0 0 0 / 0.16);
+  /* Teal, the character's hair: whatever is current, and something printing. Text on
+     it is charcoal. */
+  --mint: #67c2ce;
+  --mint-ink: #1f2428;
+  --mint-soft: #dff2f5;
+  --busy: #177e89;
+
+  /* The terminal's ground is the dark theme's too: on charcoal, the greys programs pick for
+     secondary text fell under 4.5:1. */
+  --t-bg: #141618;
+  --t-fg: #e4e7ea;
+  --t-black: #141618;
+  --t-red: #f7768e;
+  --t-green: #9ece6a;
+  --t-yellow: #e0af68;
+  --t-blue: #7aa2f7;
+  --t-magenta: #bb9af7;
+  --t-cyan: #7dcfff;
+  --t-white: #a9b1d6;
+  --t-bright-black: #565f89;
+  --t-bright-red: #f7768e;
+  --t-bright-green: #9ece6a;
+  --t-bright-yellow: #e0af68;
+  --t-bright-blue: #7aa2f7;
+  --t-bright-magenta: #bb9af7;
+  --t-bright-cyan: #7dcfff;
+  --t-bright-white: #c0caf5;
+}
+
+/* The dark theme: the same colours on the picture's charcoal. */
+.dark {
+  color-scheme: dark;
+  --background: #1b1d20;
+  --foreground: #f1f3f4;
+  --card: #25282c;
+  --card-foreground: #f1f3f4;
+  --popover: #25282c;
+  --popover-foreground: #f1f3f4;
+  --primary: #f1f3f4;
+  --primary-foreground: #1b1d20;
+  --secondary: #2e3136;
+  --secondary-foreground: #f1f3f4;
+  --muted: #2e3136;
+  --muted-foreground: #a3abb2;
+  --accent: #3c4045;
+  --accent-foreground: #f1f3f4;
+  --destructive: #f08aa0;
+  --border: #30343a;
+  --input: #3c4045;
+  --ring: #7fb0f5;
+
+  --soft: #2e3136;
+  --soft-strong: #3c4045;
+  --glass: rgb(37 40 44 / 0.97);
+  --glass-edge: #30343a;
+  --glass-shadow: 0 -8px 40px rgb(0 0 0 / 0.5);
+  --busy: #67c2ce;
+  --mint-soft: #1f3b40;
+  /* A step below the page, so the terminal reads as set into it. */
+  --t-bg: #141618;
+}
+
+/* Colour sets. Each one fills the same roles: `hero` is the summary card, `mint` marks
+   what is current, `busy` says something is printing. Chosen in "This device". */
+[data-accent="miku"] {
+  --hero: #39c5bb;
+  --hero-ink: #0f2f2c;
+  --hero-pill: rgb(15 47 44 / 0.15);
+  --mint: #39c5bb;
+  --mint-ink: #0f2f2c;
+  --mint-soft: #d8f5f1;
+  --busy: #097a71;
+  --ring: #1fa89e;
+}
+.dark[data-accent="miku"] {
+  --mint-soft: #173f3b;
+  --busy: #39c5bb;
+  --ring: #39c5bb;
+}
+[data-accent="aqua"] {
+  --hero: #36a3d9;
+  --hero-ink: #0b2836;
+  --hero-pill: rgb(11 40 54 / 0.15);
+  --mint: #36a3d9;
+  --mint-ink: #0b2836;
+  --mint-soft: #dbeffa;
+  --busy: #1479ad;
+  --ring: #1e8fc9;
+}
+.dark[data-accent="aqua"] {
+  --mint-soft: #163a4d;
+  --busy: #5cb9e6;
+  --ring: #5cb9e6;
+}
+[data-accent="sakura"] {
+  --hero: #f2a3b8;
+  --hero-ink: #3d1a25;
+  --hero-pill: rgb(61 26 37 / 0.15);
+  --mint: #f2a3b8;
+  --mint-ink: #3d1a25;
+  --mint-soft: #fde8ee;
+  --busy: #b0486a;
+  --ring: #d76c8c;
+}
+.dark[data-accent="sakura"] {
+  --mint-soft: #4a2531;
+  --busy: #f2a3b8;
+  --ring: #f2a3b8;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  :root {
+    /* Extra room above the page. None is needed: a browser starts a page below its bars. */
+    --safe-top: 0px;
+  }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  /* An app, not a document: the page never scrolls and never rubber-bands. `none`, not
+     `contain`: contain still lets an element bounce at its own edges. */
+  html,
+  body {
+    overscroll-behavior: none;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground overflow-hidden font-medium;
+  }
+  button {
+    -webkit-tap-highlight-color: transparent;
+  }
+  button:not(:disabled),
+  a[href],
+  label[for] {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
+  }
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+  }
+}
+
+/* Glass: for what floats over other content, so that content shows through softly. */
+@utility glass {
+  background: var(--glass);
+  border: 1px solid var(--glass-edge);
+  box-shadow: var(--glass-shadow);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+}
+
+/* Card: a solid surface one step above the page. */
+@utility card {
+  background: var(--card);
+  box-shadow: var(--card-shadow);
+}
+
+/* A scroll area's own bar, in the surface's tone: a thin rounded thumb set in from the
+   edge, with no track. `--thumb` is the thumb's colour. */
+@utility slim-scroll {
+  --thumb: color-mix(in srgb, currentColor 28%, transparent);
+  &::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+  &::-webkit-scrollbar-track,
+  &::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  /* Keeps the thumb out of the rounded corners of the box it scrolls. */
+  &::-webkit-scrollbar-track {
+    margin: 18px;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--thumb) content-box;
+    border: 4px solid transparent;
+    border-radius: 999px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, currentColor 45%, transparent) content-box;
+  }
+  /* Browsers without those parts get the standard, simpler form. */
+  @supports not selector(::-webkit-scrollbar) {
+    scrollbar-width: thin;
+    scrollbar-color: var(--thumb) transparent;
+  }
+}
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* The terminal is painted outside React, row by row; these style what it paints. */
+.term-screen,
+.term-history {
+  font: 400 var(--fs, 12px) / 1.25 var(--font-mono);
+  font-variant-ligatures: none;
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+  padding: 0 12px;
+}
+.term-screen {
+  position: relative;
+  padding-top: 12px;
+  padding-bottom: 12px;
+  /* `--used` is the number of rows down to the last one written or the cursor's; the
+     empty rows below are cut off. */
+  height: calc(24px + var(--used, 1) * 1.25em);
+  overflow: hidden;
+}
+.term-row {
+  height: 1.25em;
+}
+.term-cursor {
+  position: absolute;
+  left: calc(12px + var(--cx, 0) * 1ch);
+  top: calc(12px + var(--cy, 0) * 1.25em);
+  width: 1ch;
+  height: 1.25em;
+  border-radius: 2px;
+  background: var(--t-fg);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+/* The working mark: a strip of eight square frames, shown one at a time. Pixel art, so it
+   is scaled without smoothing. */
+.working-mark {
+  display: inline-block;
+  width: var(--s);
+  height: var(--s);
+  background-size: calc(var(--s) * 8) var(--s);
+  background-repeat: no-repeat;
+}
+.working-mark-plays {
+  animation: working-mark 0.93s steps(8) infinite;
+}
+@keyframes working-mark {
+  to {
+    background-position-x: calc(var(--s) * -8);
+  }
+}
+
+/* Something is working here: the edge breathes in the set's colour. With motion off it is
+   a steady ring. */
+.working-edge {
+  box-shadow: 0 0 0 2px var(--busy);
+  animation: working-edge 1.4s ease-in-out infinite;
+}
+@keyframes working-edge {
+  0%,
+  100% {
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--busy) 20%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 2px var(--busy), 0 0 0 5px color-mix(in oklab, var(--busy) 25%, transparent);
+  }
+}
+
+/* The pointer on the screen page: eight frames of the owner's own Mac cursor, 28 px, its tip
+   at the point it stands for (31 of 32 across, at the top). */
+.mac-cursor {
+  width: 28px;
+  height: 28px;
+  margin-left: -27px;
+  background-size: 224px 28px;
+  background-repeat: no-repeat;
+  image-rendering: pixelated;
+  animation: mac-cursor 0.93s steps(8) infinite;
+}
+@keyframes mac-cursor {
+  to {
+    background-position-x: -224px;
+  }
+}
+
+/* An armed two-press control: its filled copy drains to the left over the three seconds
+   it stays armed, and a shine crosses it once as it arms. */
+.confirm-fill {
+  animation: confirm-drain 3s linear forwards;
+}
+.confirm-shine {
+  animation: confirm-shine 0.7s ease-out forwards;
+}
+@keyframes confirm-drain {
+  from {
+    clip-path: inset(0 0 0 0);
+  }
+  to {
+    clip-path: inset(0 100% 0 0);
+  }
+}
+@keyframes confirm-shine {
+  to {
+    transform: translateX(420%);
+  }
+}
+
+/* Opening a pane: the preview grows into the stage. */
+::view-transition-group(stage) {
+  animation-duration: 0.55s;
+  animation-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+}
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.28s;
+}
+
+/* Switching theme: the old page stays put underneath while the new one is revealed as a
+   growing circle (the circle itself is animated from lib/theme.ts). */
+.theme-switching::view-transition-old(root),
+.theme-switching::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+.theme-switching::view-transition-new(root) {
+  z-index: 1;
+}
+/* While the circle grows, nothing else may ease its own colours: an element still
+   fading from the old theme would show through the part already revealed. */
+/* A region with its own transition name is painted above the page's snapshot, and so above
+   an open sheet. While the theme changes there is one snapshot only. */
+.theme-switching * {
+  view-transition-name: none !important;
+}
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
+}
+
+/* A field's error: shown for a few seconds as it arrives, then only while its input is
+   focused or pointed at. */
+.error-bubble {
+  opacity: 0;
+  animation: error-bubble 3.6s ease-out both;
+}
+.group\/err:focus-within .error-bubble,
+.group\/err:hover .error-bubble {
+  opacity: 1;
+  animation: none;
+}
+@keyframes error-bubble {
+  0% {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  5%,
+  92% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after,
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+    transition: none !important;
+  }
+}

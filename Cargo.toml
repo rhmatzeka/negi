@@ -1,0 +1,33 @@
+[package]
+name = "negi"
+version = "0.1.0"
+edition = "2024"
+description = "tmux on your phone, over one control-mode connection per session."
+license = "MIT"
+repository = "https://github.com/rifuki/negi"
+homepage = "https://github.com/rifuki/negi"
+readme = "README.md"
+keywords = ["tmux", "terminal", "remote", "phone", "tailscale"]
+categories = ["command-line-utilities"]
+# The interface ships built: web/dist is ignored by git but goes into the crate, so
+# `cargo install` needs no Node.
+include = ["/src/**/*", "/web/dist/**/*", "/Cargo.toml", "/Cargo.lock", "/README.md", "/LICENSE"]
+
+[dependencies]
+axum = { version = "0.8.9", features = ["ws"] }
+chacha20poly1305 = "0.11.0"
+clap = { version = "4.6.7", features = ["derive", "wrap_help", "env"] }
+cliclack = "0.5.7"
+console = "0.16.6"
+futures-util = { version = "0.3.34", default-features = false, features = ["std"] }
+getrandom = "0.4.3"
+libc = "0.2.191"
+rust-embed = { version = "8.14.0", features = ["mime-guess"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+sha2 = "0.11.1"
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "macros", "net", "process", "io-util", "sync", "time", "signal"] }
+
+[dev-dependencies]
+futures-util = "0.3.34"
+tokio-tungstenite = "0.30.0"

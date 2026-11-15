@@ -1,0 +1,9 @@
+/target
+/web/node_modules
+/web/dist
+/_handoff
+
+# Full-size art sources and generated candidates: kept locally, the app ships the webp/png in web/
+/design
+/dist
+/anti-slop
