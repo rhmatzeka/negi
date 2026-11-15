@@ -249,11 +249,11 @@ pub async fn working(link: &Link, panes: &[String]) -> Result<Vec<String>, Error
         .collect())
 }
 
-/// An agent's "still going" line near the bottom: Claude Code's `✽ Gesticulating… (7m 6s`
-/// from the first column, or Codex's `esc to interrupt`. Quotes in a transcript do not count.
+/// An agent's "still going" line in the last 40 lines (a task list can sit under it): Claude
+/// Code's `✽ Gesticulating… (7m 6s` from the first column, or Codex's `esc to interrupt`.
 pub fn agent_at_work(screen: &str) -> bool {
     let lines: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).collect();
-    lines[lines.len().saturating_sub(8)..].iter().any(|line| {
+    lines[lines.len().saturating_sub(40)..].iter().any(|line| {
         if line.to_ascii_lowercase().contains("esc to interrupt") {
             return true;
         }
@@ -721,9 +721,12 @@ mod tests {
         assert!(!agent_at_work("a Thinking… (5s)"));
         // Quoted in a transcript: indented, or long scrolled up from the bottom.
         assert!(!agent_at_work("  ✽ Gesticulating… (7m 6s · ↓ 18.5k tokens)\n❯ "));
-        let far = format!("✽ Gesticulating… (7m 6s)\n{}", "line\n".repeat(10));
+        let far = format!("✽ Gesticulating… (7m 6s)\n{}", "line\n".repeat(41));
         assert!(!agent_at_work(&far));
-        let quoted = format!("it said esc to interrupt\n{}", "line\n".repeat(10));
+        let quoted = format!("it said esc to interrupt\n{}", "line\n".repeat(41));
         assert!(!agent_at_work(&quoted));
+        // A task list under the spinner pushes it up from the bottom.
+        let tasks = format!("✶ Twisting… (5m 10s · ↓ 6k tokens)\n{}❯ \n", "  ⎿  ☐ a task\n".repeat(12));
+        assert!(agent_at_work(&tasks));
     }
 }

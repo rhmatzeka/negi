@@ -157,15 +157,15 @@ export function receive(msg: Incoming) {
       if (msg.reason === "unpaired") signOut("This device is no longer paired.");
       break;
     case "tree":
-      // The tree repeats which panes the server has heard from lately. The ones already
-      // shown as printing stay; a new one waits its turn like any other.
+      // The tree carries every pane the server counts as working, agents working silently
+      // included. Read the list back after `printing`, which has just added to it.
       for (const pane of msg.busy) printing(pane);
       for (const [pane, timer] of starting) {
         if (msg.busy.includes(pane)) continue;
         clearTimeout(timer);
         starting.delete(pane);
       }
-      useApp.setState({ server: msg.server, sessions: msg.sessions, busy: state.busy.filter((p) => msg.busy.includes(p)), hasTree: true });
+      useApp.setState({ server: msg.server, sessions: msg.sessions, busy: useApp.getState().busy.filter((p) => msg.busy.includes(p)), hasTree: true });
       break;
     case "screen": {
       let screen = screens.get(msg.pane);
