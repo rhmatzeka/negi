@@ -10,6 +10,7 @@ use serde_json::json;
 use tokio::sync::{mpsc, oneshot};
 use tokio::time::MissedTickBehavior;
 
+use crate::awake::Awake;
 use crate::tmux::Tmux;
 use crate::tmux::link::{Error, Link};
 use crate::tmux::mux::{self, Screen, Session};
@@ -155,6 +156,8 @@ struct Actor {
     tree_read: Instant,
     busy: HashMap<String, Instant>,
     empty_since: Option<Instant>,
+    /// Held while any phone is connected.
+    awake: Option<Awake>,
     booted: Option<Instant>,
 }
 
@@ -176,6 +179,7 @@ impl Actor {
             tree_read: Instant::now(),
             busy: HashMap::new(),
             empty_since: Some(Instant::now()),
+            awake: None,
             booted: None,
         }
     }
@@ -216,6 +220,9 @@ impl Actor {
                     },
                 );
                 self.empty_since = None;
+                if self.awake.is_none() {
+                    self.awake = Awake::hold();
+                }
                 if reply.send((id, rx)).is_err() {
                     self.drop_client(id);
                     return;
@@ -548,6 +555,7 @@ impl Actor {
         self.forget_unwatched();
         if self.clients.is_empty() {
             self.empty_since.get_or_insert_with(Instant::now);
+            self.awake = None;
         }
     }
 

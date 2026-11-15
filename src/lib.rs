@@ -1,5 +1,6 @@
 //! negi: tmux on a phone, over one control-mode connection per session.
 
+pub mod awake;
 pub mod hub;
 pub mod server;
 pub mod store;

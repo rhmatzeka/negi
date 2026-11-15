@@ -27,8 +27,9 @@ the page over your tailnet; nothing goes through anyone else's server.
   programs print.
 - Type into a pane, with a key row for esc, tab, ctrl, option, command and the arrows.
 - Answer an agent's prompt, scroll back through a pane, send a file into it.
-- See and drive the Mac's own screen, with touch as a trackpad and the Mac's cursor.
-- The Mac's battery and Wi-Fi at a glance, and a speed test of the link to it.
+- See and drive the Mac's own screen as live video, with touch as a trackpad.
+- The Mac's battery and Wi-Fi at a glance, and a speed test of the link to it. While a
+  phone is connected the Mac does not sleep for idleness (closing the lid still sleeps it).
 
 <p align="center">
   <img src="docs/media/screens.webp" alt="Pairing, the session list, an agent's pane, and the settings">

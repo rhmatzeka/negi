@@ -182,6 +182,8 @@ The computer's state and two speed tests, each with the device's token as `Autho
 Bearer`. `GET /api/mac` answers `{"battery": ..., "wifi": ...}` from `pmset -g batt` and
 `system_profiler SPAirPortDataType -json`, kept 10 s (the second takes about 1.7 s); the
 network's name is left out, as macOS hides it from programs without Location access.
+While any phone is connected negi holds a `PreventUserIdleSystemSleep` assertion, so the
+Mac does not sleep for idleness under a session or the screen; the lid still sleeps it.
 `GET /api/speed/down?bytes=N` sends N bytes that do not compress and `POST /api/speed/up`
 says how many bytes arrived, both up to 32 MB, for the page to time the phone's link to the
 host. `POST /api/speed/internet` runs `networkQuality -c -M 20` on the host, one run at a
