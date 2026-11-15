@@ -38,12 +38,16 @@ const CLIENT_QUEUE: usize = 256;
 pub struct Timing {
     /// How long the control clients outlive the last phone, so a reconnect is instant.
     pub grace: Duration,
+    /// After a control client attaches, idle agents redraw for a moment; output in this
+    /// window is not counted as work.
+    pub attach_redraw: Duration,
 }
 
 impl Default for Timing {
     fn default() -> Self {
         Self {
             grace: Duration::from_secs(10),
+            attach_redraw: Duration::from_millis(1500),
         }
     }
 }
@@ -158,6 +162,8 @@ struct Actor {
     empty_since: Option<Instant>,
     /// Held while any phone is connected.
     awake: Option<Awake>,
+    /// When each link attached, by its id, for [`Timing::attach_redraw`].
+    attached: HashMap<u64, Instant>,
     booted: Option<Instant>,
 }
 
@@ -180,6 +186,7 @@ impl Actor {
             busy: HashMap::new(),
             empty_since: Some(Instant::now()),
             awake: None,
+            attached: HashMap::new(),
             booted: None,
         }
     }
@@ -287,7 +294,8 @@ impl Actor {
     fn notice(&mut self, link: u64, notice: Notice) {
         match notice {
             Notice::Output(pane) => {
-                if self.busy.insert(pane.clone(), Instant::now()).is_none() {
+                let redraw = self.attached.get(&link).is_some_and(|at| at.elapsed() < self.timing.attach_redraw);
+                if !redraw && self.busy.insert(pane.clone(), Instant::now()).is_none() {
                     self.broadcast(text(&json!({ "t": "busy", "pane": pane, "on": true })));
                 }
                 if let Some(watched) = self.panes.get_mut(&pane) {
@@ -396,6 +404,7 @@ impl Actor {
         };
         match attached.await {
             Ok((session, link)) => {
+                self.attached.insert(link.id(), Instant::now());
                 self.links.insert(session, Arc::new(link));
                 self.read_tree().await;
             }
@@ -430,9 +439,12 @@ impl Actor {
                 && let Ok(link) =
                     Link::attach(&self.tmux, Some(&session.id), self.notices_tx.clone())
             {
+                self.attached.insert(link.id(), Instant::now());
                 self.links.insert(session.id.clone(), Arc::new(link));
             }
         }
+        let window = self.timing.attach_redraw;
+        self.attached.retain(|_, at| at.elapsed() < window);
 
         let alive: HashSet<&str> = tree
             .iter()

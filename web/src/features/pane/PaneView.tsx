@@ -8,7 +8,8 @@ import { useShallow } from "zustand/react/shallow";
 import { BusyMark, WindowChip } from "@/components/bits";
 import { ConfirmButton } from "@/components/Confirm";
 import { Tip } from "@/components/Tip";
-import { KeyDock } from "@/features/pane/KeyDock";
+import { KeyDock, PaneSoftKeys } from "@/features/pane/KeyDock";
+import { useKeyboard } from "@/features/pane/mods";
 import { LinkState } from "@/connection/LinkState";
 import { Terminal } from "@/features/pane/Terminal";
 import { Tile } from "@/components/Tile";
@@ -45,6 +46,7 @@ export function PaneView({ pane }: { pane: string }) {
   const working = useApp((s) => s.busy);
   const busy = working.includes(pane);
   const openSheet = useApp((s) => s.openSheet);
+  const soft = useKeyboard((s) => s.soft);
   const ask = useAsk();
   // The pane last seen in the tree, and whose it was.
   const listed = useRef<{ pane: string; session: string; name: string } | null>(null);
@@ -91,19 +93,21 @@ export function PaneView({ pane }: { pane: string }) {
   const shown = asked ?? pane;
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col gap-3 px-3 pt-[max(12px,var(--safe-top))] pb-[max(12px,env(safe-area-inset-bottom))] lg:px-5">
-      <header className="flex shrink-0 items-center gap-2">
+    <div className="flex h-full min-w-0 flex-1 flex-col gap-3 px-3 pt-[max(12px,var(--safe-top))] pb-[max(12px,env(safe-area-inset-bottom))] lg:px-5 land:gap-2 land:pt-2 land:pb-2">
+      {/* On a phone on its side the name and the window chips share one row. */}
+      <div className="flex shrink-0 flex-col gap-3 land:flex-row land:items-center land:gap-2">
+      <header className="flex shrink-0 items-center gap-2 land:max-w-[45%]">
         <Button variant="soft" size="icon" aria-label="Back to sessions"
           // The corner of a phone is hard to hit: the button answers a little beyond its own edge.
           className="relative before:absolute before:-top-3 before:right-0 before:-bottom-2 before:-left-3 lg:hidden" onClick={() => navigate({ to: "/", viewTransition: true })}>
           <CaretLeftIcon weight="bold" size={20} />
         </Button>
-        {where && <Tile icon={programIcon(where.pane.command)} tone="accent" seed={where.session.name} />}
+        {where && <Tile icon={programIcon(where.pane.command)} tone="accent" seed={where.session.name} className="land:hidden" />}
         <div className="min-w-0 flex-1 px-1">
           {/* The page's one h1 is the session list's; this names a part of it. */}
           <h2 className="truncate text-lg leading-tight font-semibold">{where?.window.name ?? "Opening…"}</h2>
           {where && (
-            <p className="mt-0.5 flex items-center gap-3 text-sm text-muted-foreground">
+            <p className="mt-0.5 flex items-center gap-3 text-sm text-muted-foreground land:hidden">
               <Meta icon={StackIcon} label="Session" text={where.session.name} />
               <Meta icon={TerminalWindowIcon} label="Program" text={where.pane.command} />
               <Meta icon={FolderIcon} label="Folder" text={shortPath(where.pane.path)} className="hidden sm:flex" />
@@ -122,7 +126,7 @@ export function PaneView({ pane }: { pane: string }) {
         )}
       </header>
       {where && (
-        <div className="no-scrollbar -m-1.5 flex shrink-0 gap-2 overflow-x-auto p-1.5">
+        <div className="no-scrollbar -m-1.5 flex shrink-0 gap-2 overflow-x-auto p-1.5 land:min-w-0 land:flex-1">
           {where.session.windows.map((w) => (
             <WindowChip
               key={w.id}
@@ -153,8 +157,10 @@ export function PaneView({ pane }: { pane: string }) {
           </Tip>
         </div>
       )}
+      </div>
       <Terminal key={pane} pane={pane} />
       <KeyDock pane={pane} />
+      {soft && <PaneSoftKeys pane={pane} />}
     </div>
   );
 }

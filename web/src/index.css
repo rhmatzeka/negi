@@ -5,6 +5,8 @@
 
 /* A light and a dark theme; the terminal is dark in both. */
 @custom-variant dark (&:is(.dark *));
+/* A phone turned on its side: wide, but too short to stack the page. */
+@custom-variant land (@media (orientation: landscape) and (max-height: 500px));
 
 @font-face {
   font-family: "Pane Mono";

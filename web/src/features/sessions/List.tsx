@@ -1,6 +1,6 @@
 // The home column: what is running, two actions, then one row per session.
 
-import { BrowsersIcon, DeviceMobileIcon, DotsThreeIcon, GearSixIcon, MonitorIcon, MoonIcon, PlusIcon, PulseIcon } from "@phosphor-icons/react";
+import { BrowsersIcon, CaretRightIcon, DeviceMobileIcon, DotsThreeIcon, GearSixIcon, MonitorIcon, MoonIcon, PlusIcon, PulseIcon } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { Mark } from "@/components/Mark";
@@ -24,6 +24,7 @@ function Summary() {
   const windows = useApp((s) => s.sessions.reduce((n, x) => n + x.windows.length, 0));
   // Panes, not sessions: two agents working in one session are two at work.
   const printing = useApp((s) => s.sessions.reduce((n, x) => n + x.windows.reduce((m, w) => m + w.panes.filter((p) => s.busy.includes(p.id)).length, 0), 0));
+  const openSheet = useApp((s) => s.openSheet);
   const number = useRef<HTMLParagraphElement>(null);
   const shown = useRef(0);
 
@@ -43,26 +44,39 @@ function Summary() {
   );
 
   return (
-    <section aria-label="Summary" className="in relative isolate min-h-[212px] overflow-hidden rounded-xl bg-hero px-6 pt-7 pb-6 text-hero-ink">
+    <section aria-label="Summary" className="in relative isolate min-h-[212px] overflow-hidden rounded-xl bg-hero px-6 pt-7 pb-6 text-hero-ink land:min-h-0 land:px-5 land:pt-4 land:pb-4">
       {/* Two flat discs behind everything, so the card is not one empty colour. */}
       <span aria-hidden className="absolute -top-20 -right-12 -z-10 size-60 rounded-full bg-hero-ink/[0.07]" />
       <span aria-hidden className="absolute top-14 -right-28 -z-10 size-72 rounded-full bg-hero-ink/[0.05]" />
-      <p ref={number} className="text-[68px] leading-[0.95] font-semibold tabular-nums">
+      <p ref={number} className="text-[68px] leading-[0.95] font-semibold tabular-nums land:text-[44px]">
         {count}
       </p>
       <p className="mt-1 text-[15px] font-medium">{count === 1 ? "session running" : "sessions running"}</p>
-      <div className="mt-5 flex max-w-[58%] flex-col items-start gap-2">
+      <div className="mt-5 flex max-w-[58%] flex-col items-start gap-2 land:mt-3">
         <span className="inline-flex h-ctl-sm items-center gap-1.5 rounded-full bg-(--hero-pill) pr-4 pl-3 text-sm font-semibold">
           <BrowsersIcon weight="fill" size={16} />
           {windows} {windows === 1 ? "window" : "windows"}
         </span>
-        <span className="inline-flex h-ctl-sm items-center gap-1.5 rounded-full bg-(--hero-pill) pr-4 pl-3 text-sm font-semibold">
-          {printing ? <PulseIcon weight="fill" size={16} /> : <MoonIcon weight="fill" size={16} />}
-          {printing ? `${printing} working` : "all quiet"}
-        </span>
+        {printing ? (
+          <button
+            type="button"
+            aria-label={`${printing} working: show which`}
+            onClick={() => openSheet({ kind: "working" })}
+            className="inline-flex h-ctl-sm items-center gap-1.5 rounded-full bg-(--hero-pill) pr-3 pl-3 text-sm font-semibold transition-transform active:scale-[0.97]"
+          >
+            <PulseIcon weight="fill" size={16} />
+            {printing} working
+            <CaretRightIcon weight="bold" size={14} className="opacity-70" />
+          </button>
+        ) : (
+          <span className="inline-flex h-ctl-sm items-center gap-1.5 rounded-full bg-(--hero-pill) pr-4 pl-3 text-sm font-semibold">
+            <MoonIcon weight="fill" size={16} />
+            all quiet
+          </span>
+        )}
       </div>
       {/* Her drawing rounds off at the bottom; sunk a little, the card's edge cuts her hands as a ledge would. */}
-      <Peek className="absolute -right-5 bottom-0 w-[50%] max-w-[210px] translate-y-[6%]" />
+      <Peek className="absolute -right-5 bottom-0 w-[50%] max-w-[210px] translate-y-[6%] land:max-w-[150px]" />
     </section>
   );
 }
@@ -167,8 +181,10 @@ export function List({ open }: { open: string | null }) {
 
   return (
     // The mark, the card and the two buttons stay where they are; only the sessions scroll under them.
-    <div ref={root} className="flex h-full min-w-0 flex-col overflow-hidden px-4 pt-[max(12px,var(--safe-top))] *:shrink-0">
-      <header className="in flex items-center gap-2 pb-4">
+    // On a phone on its side the card and buttons take the left half, the sessions the right.
+    <div ref={root} className="flex h-full min-w-0 flex-col overflow-hidden px-4 pt-[max(12px,var(--safe-top))] *:shrink-0 land:grid land:grid-cols-2 land:gap-x-4">
+      <div className="contents land:flex land:min-h-0 land:flex-col land:overflow-y-auto land:pb-3 land:*:shrink-0">
+      <header className="in flex items-center gap-2 pb-4 land:pb-3">
         <Mark />
         <span className="flex-1" />
         <LinkState />
@@ -186,7 +202,7 @@ export function List({ open }: { open: string | null }) {
         </Tip>
       </header>
       <Summary />
-      <div className="in grid grid-cols-2 gap-2 py-4">
+      <div className="in grid grid-cols-2 gap-2 py-4 land:pb-0 land:pt-3">
         <Button variant="soft" size="md" onClick={() => openSheet({ kind: "new-session" })}>
           <PlusIcon weight="bold" size={18} />
           New session
@@ -196,8 +212,9 @@ export function List({ open }: { open: string | null }) {
           This device
         </Button>
       </div>
+      </div>
       <h1 className="sr-only">Sessions</h1>
-      <div ref={rows} className="slim-scroll -mx-2 flex min-h-0 !shrink flex-1 flex-col gap-1 overflow-y-auto overscroll-none px-2 pb-[calc(24px+env(safe-area-inset-bottom))] *:shrink-0">
+      <div ref={rows} className="slim-scroll -mx-2 flex min-h-0 !shrink flex-1 flex-col gap-1 overflow-y-auto overscroll-none px-2 pb-[calc(24px+env(safe-area-inset-bottom))] *:shrink-0 land:h-full">
         {sessions.map((session) => (
           <SessionRow key={session.id} session={session} open={session.windows.some((w) => w.panes.some((p) => p.id === open))} />
         ))}

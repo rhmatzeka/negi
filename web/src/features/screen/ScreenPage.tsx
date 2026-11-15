@@ -1,7 +1,7 @@
 // The host's own screen, seen and worked with touch: live video from negi itself, or the
 // host's screen sharing (VNC) when video cannot be had.
 
-import { ArrowClockwiseIcon, PlugsConnectedIcon, PlugsIcon, CaretLeftIcon, DeviceMobileIcon, EyeIcon, EyeSlashIcon, HandPointingIcon, HandsClappingIcon, KeyboardIcon, LockSimpleIcon, UserIcon, WarningCircleIcon } from "@phosphor-icons/react";
+import { ArrowClockwiseIcon, PlugsConnectedIcon, PlugsIcon, CaretLeftIcon, EyeIcon, EyeSlashIcon, HandPointingIcon, HandsClappingIcon, LockSimpleIcon, UserIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
 import { type FormEvent, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -12,9 +12,11 @@ import { Switch } from "@/components/Switch";
 import { Tip } from "@/components/Tip";
 import { outdated } from "@/connection/link";
 import { useApp } from "@/lib/store";
+import { repeats } from "@/lib/repeat";
 import { cn } from "@/lib/utils";
 import macCursor from "@/assets/art/cursor.webp";
-import { SoftKeys } from "./SoftKeys";
+import { KeyboardMenu } from "@/components/KeyboardMenu";
+import { SoftKeys } from "@/components/SoftKeys";
 import { attach, type Host } from "./trackpad";
 import { canDecode, type VideoAnswer, VideoViewer } from "./video";
 
@@ -473,9 +475,9 @@ export function ScreenPage() {
                 style={{ "--k": "max(var(--scale), calc(22 / var(--side)))", width: "calc(var(--w) * var(--k) * 1px)", height: "calc(var(--h) * var(--k) * 1px)", left: "calc(var(--hx) * var(--k) * -1px)", top: "calc(var(--hy) * var(--k) * -1px)" } as React.CSSProperties}
               />
             </span>
-            {/* Until the Mac has sent its cursor: the owner's own arrow (Mousecape), tip 31 of 32
-                points across, at the top. */}
-            <span aria-hidden className={cn("mac-cursor block origin-top-right scale-(--unzoom)", native && "hidden")} style={{ backgroundImage: `url(${macCursor})` }} />
+            {/* The owner's own arrow (Mousecape) until the Mac sends its cursor, and over video: sized
+                as a Mac cursor in the picture (28 of its pixels), zooming with it, never under 10 px. */}
+            <span aria-hidden className={cn("mac-cursor block origin-top-right", native && "hidden")} style={{ backgroundImage: `url(${macCursor})`, scale: "max(calc(10 / 28 * var(--unzoom)), var(--scale))" }} />
           </div>
         </div>
         {/* What the fingers touch: the screen itself takes no touches, they are read here as a trackpad's. */}
@@ -591,49 +593,34 @@ export function ScreenPage() {
                 ["return", SYM.enter],
               ] as const
             ).map(([word, sym]) => (
-              <button key={word} type="button" onClick={() => key(sym)} className={cn(KEY, "bg-soft active:bg-soft-strong")}>
-                {word}
-              </button>
+              <RowKey key={word} word={word} hold={word !== "esc" && word !== "tab" && word !== "return"} press={() => key(sym)} />
             ))}
           </div>
-          <div className="flex gap-1.5">
-            <Tip label="Phone keyboard" hint="Covers the lower half">
-              <Button
-                variant="soft"
-                size="icon-lg"
-                aria-label="Phone keyboard"
-                aria-pressed={typing}
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  setSoft(false);
-                  if (document.activeElement === typist.current) typist.current?.blur();
-                  else typist.current?.focus({ preventScroll: true });
-                }}
-                className={cn(typing && "bg-mint text-mint-ink hover:bg-mint")}
-              >
-                <DeviceMobileIcon weight="bold" size={22} />
-              </Button>
-            </Tip>
-            <Tip label="negi keyboard" hint="Sits under the screen">
-              <Button
-                variant="soft"
-                size="icon-lg"
-                aria-label="negi keyboard"
-                aria-pressed={soft}
-                onPointerDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  typist.current?.blur();
-                  setSoft(!soft);
-                }}
-                className={cn(soft && "bg-mint text-mint-ink hover:bg-mint")}
-              >
-                <KeyboardIcon weight="bold" size={22} />
-              </Button>
-            </Tip>
-          </div>
+          <KeyboardMenu
+            phone={typing}
+            negi={soft}
+            onPhone={() => {
+              setSoft(false);
+              if (document.activeElement === typist.current) typist.current?.blur();
+              else typist.current?.focus({ preventScroll: true });
+            }}
+            onNegi={() => {
+              typist.current?.blur();
+              setSoft(!soft);
+            }}
+          />
         </div>
       )}
       {phase.is === "showing" && touch && soft && <SoftKeys press={key} symOf={symOf} />}
     </main>
+  );
+}
+
+/** One key of the row under the screen; with `hold` it repeats while held. */
+function RowKey({ word, hold, press }: { word: string; hold: boolean; press: () => void }) {
+  return (
+    <button type="button" {...(hold ? repeats(press) : { onClick: press })} className={cn(KEY, "bg-soft select-none active:bg-soft-strong [-webkit-touch-callout:none]")}>
+      {word}
+    </button>
   );
 }

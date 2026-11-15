@@ -9,6 +9,7 @@ export type SheetState =
   | { kind: "pane"; pane: string }
   | { kind: "device" }
   | { kind: "mac" }
+  | { kind: "working" }
   | null;
 
 interface AppState {

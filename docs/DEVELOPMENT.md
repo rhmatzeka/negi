@@ -89,5 +89,9 @@ cargo test
 does, and `NEGI_VNC_PORT` points screen sharing at a stand-in: together they check the
 page's fallback without changing any setting.
 
+macOS's capture service tells clients apart by their executable's path. Two negi servers
+started from the same binary, one of which has captured, leave the other's capture hanging
+at start; run a second server for tests from a copy of the binary.
+
 The live tests start their own tmux servers on private sockets with `-f /dev/null`, so they
 never touch your sessions, your tmux.conf or its plugins. They need tmux installed.

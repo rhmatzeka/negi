@@ -11,6 +11,7 @@ import { MacSheet } from "@/features/mac/MacSheet";
 import { NewSession } from "./NewSession";
 import { PaneSheet } from "./PaneSheet";
 import { SessionSheet } from "./SessionSheet";
+import { WorkingSheet } from "./WorkingSheet";
 
 /** True from the width at which the app shows two columns. */
 function useWide(): boolean {
@@ -38,6 +39,7 @@ export function Sheets() {
       {shown?.kind === "pane" && <PaneSheet id={shown.pane} />}
       {shown?.kind === "device" && <DeviceSheet />}
       {shown?.kind === "mac" && <MacSheet />}
+      {shown?.kind === "working" && <WorkingSheet />}
     </>
   );
   const onOpenChange = (open: boolean) => !open && close();

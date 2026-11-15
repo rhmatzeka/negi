@@ -41,6 +41,7 @@ async fn start(s: &Scratch) -> Running {
             s.tmux.clone(),
             Timing {
                 grace: Duration::from_millis(150),
+                attach_redraw: Duration::ZERO,
             },
         ),
         store: Store::open(&state).unwrap(),

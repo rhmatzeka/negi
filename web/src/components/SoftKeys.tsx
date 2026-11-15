@@ -1,5 +1,6 @@
 import { ArrowUDownLeftIcon, ArrowFatUpIcon, BackspaceIcon } from "@phosphor-icons/react";
 import { type ReactNode, useRef, useState } from "react";
+import { repeats } from "@/lib/repeat";
 import { cn } from "@/lib/utils";
 
 const BACK = 0xff08;
@@ -37,23 +38,9 @@ export function SoftKeys({ press, symOf }: SoftKeysProps) {
     lastShift.current = now;
   };
 
-  // Backspace held down keeps deleting, as on any keyboard.
-  const repeat = useRef<{ wait?: number; every?: number }>({});
-  const stop = () => {
-    clearTimeout(repeat.current.wait);
-    clearInterval(repeat.current.every);
-  };
-  const holdBack = () => {
-    press(BACK);
-    stop();
-    repeat.current.wait = window.setTimeout(() => {
-      repeat.current.every = window.setInterval(() => press(BACK), 70);
-    }, 420);
-  };
-
   const shown = (char: string) => (layer === "abc" && shift !== "off" ? char.toUpperCase() : char);
   return (
-    <div role="group" aria-label="Keyboard" className="grid shrink-0 gap-1.5 select-none" onPointerDown={(e) => e.preventDefault()}>
+    <div role="group" aria-label="Keyboard" className="grid shrink-0 gap-1.5 select-none land:gap-1" onPointerDown={(e) => e.preventDefault()}>
       <Row>
         {[...rows[0]].map((c) => (
           <Key key={c} label={shown(c)} onPress={() => type(c)} />
@@ -73,7 +60,7 @@ export function SoftKeys({ press, symOf }: SoftKeysProps) {
         {[...rows[2]].map((c) => (
           <Key key={c} label={shown(c)} onPress={() => type(c)} />
         ))}
-        <Key wide label={<BackspaceIcon weight="bold" size={19} />} name="Delete" onDown={holdBack} onUp={stop} />
+        <Key wide label={<BackspaceIcon weight="bold" size={19} />} name="Delete" repeat={() => press(BACK)} />
       </Row>
       <Row>
         <Key wide label={layer === "abc" ? "123" : "abc"} name={layer === "abc" ? "Numbers and symbols" : "Letters"} onPress={() => setLayer(layer === "abc" ? "123" : "abc")} small />
@@ -92,27 +79,23 @@ interface KeyProps {
   label: ReactNode;
   name?: string;
   onPress?: () => void;
-  onDown?: () => void;
-  onUp?: () => void;
+  /** Pressed again and again while held, as Delete is. */
+  repeat?: () => void;
   wide?: boolean;
   small?: boolean;
   pressed?: boolean;
   className?: string;
 }
 
-function Key({ label, name, onPress, onDown, onUp, wide, small, pressed, className }: KeyProps) {
+function Key({ label, name, onPress, repeat, wide, small, pressed, className }: KeyProps) {
   return (
     <button
       type="button"
       aria-label={name}
       aria-pressed={pressed}
-      onPointerDown={onDown}
-      onPointerUp={onUp}
-      onPointerLeave={onUp}
-      onPointerCancel={onUp}
-      onClick={onPress}
+      {...(repeat ? repeats(repeat) : { onClick: onPress })}
       className={cn(
-        "grid h-11 min-w-0 flex-1 place-items-center rounded-sm bg-soft font-mono text-[15px] font-semibold active:bg-soft-strong",
+        "grid h-11 min-w-0 flex-1 place-items-center rounded-sm bg-soft font-mono text-[15px] font-semibold active:bg-soft-strong land:h-8",
         wide && "flex-[1.4]",
         small && "text-xs",
         pressed && "bg-mint text-mint-ink active:bg-mint/80",

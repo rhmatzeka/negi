@@ -1,13 +1,16 @@
 // The keys a phone keyboard lacks, and the field that types into the pane.
 
-import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon, CircleNotchIcon, type Icon, KeyboardIcon, PaperclipIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
+import { ArrowDownIcon, ArrowLeftIcon, ArrowRightIcon, ArrowUpIcon, CircleNotchIcon, type Icon, PaperclipIcon, PaperPlaneTiltIcon } from "@phosphor-icons/react";
 import { type FormEvent, useRef, useState } from "react";
 import { toast } from "sonner";
+import { KeyboardMenu } from "@/components/KeyboardMenu";
+import { SoftKeys } from "@/components/SoftKeys";
 import { Button } from "@/components/ui/button";
 import { Tip } from "@/components/Tip";
 import { upload, useAsk } from "@/connection/api";
 import { useApp } from "@/lib/store";
 import { isMod, take, useKeyboard, useMods } from "./mods";
+import { repeats } from "@/lib/repeat";
 import { cn } from "@/lib/utils";
 
 interface Key {
@@ -60,6 +63,9 @@ const PC: Key[] = [
   { id: "DC", name: "Delete", hint: "Deletes the character ahead", word: "Del" },
 ];
 
+/** Keys that repeat while held. */
+const REPEATS = new Set(["Up", "Down", "Left", "Right", "BSpace", "DC", "PPage", "NPage"]);
+
 export function KeyDock({ pane }: { pane: string }) {
   const ask = useAsk();
   // Keys are named the way the host's own keyboard names them.
@@ -69,6 +75,7 @@ export function KeyDock({ pane }: { pane: string }) {
   const mods = useMods((s) => s.held);
   const latched = Object.values(mods).some(Boolean);
   const typing = useKeyboard((s) => s.typing);
+  const soft = useKeyboard((s) => s.soft);
 
   // A file from the phone is kept on the host, and its path is typed into the pane, with a
   // space after it and no Enter: a path is something to say more about.
@@ -107,7 +114,7 @@ export function KeyDock({ pane }: { pane: string }) {
   };
 
   return (
-    <div className="grid shrink-0 grid-cols-[minmax(0,1fr)] gap-2">
+    <div className="grid shrink-0 grid-cols-[minmax(0,1fr)] gap-2 land:grid-cols-[minmax(0,1fr)_minmax(0,26rem)] land:items-center">
       <div role="toolbar" aria-label="Keys" className="no-scrollbar flex min-w-0 touch-pan-x gap-1.5 overflow-x-auto">
         {(mac ? MAC : PC).map(({ id, name, hint, word, icon: Glyph, sign }) => {
           const on = isMod(id) && mods[id];
@@ -118,9 +125,9 @@ export function KeyDock({ pane }: { pane: string }) {
                 data-k={id}
                 aria-label={isMod(id) ? `${name}, applies to the next key` : name}
                 aria-pressed={isMod(id) ? on : undefined}
-                onClick={() => press(id)}
+                {...(REPEATS.has(id) ? repeats(() => press(id)) : { onClick: () => press(id) })}
                 className={cn(
-                  "flex h-ctl min-w-ctl shrink-0 items-center justify-center gap-1 rounded-sm px-3 font-mono text-sm font-bold",
+                  "flex h-ctl min-w-ctl shrink-0 items-center justify-center gap-1 rounded-sm px-3 font-mono text-sm font-bold select-none [-webkit-touch-callout:none]",
                   // Only the ground fades on a press: scaling shifts the colour on a wide-gamut
                   // screen, and a fading label vanishes halfway, which reads as a blink.
                   "transition-[background-color] duration-150 ease-out active:duration-0",
@@ -169,20 +176,18 @@ export function KeyDock({ pane }: { pane: string }) {
             {sending ? <CircleNotchIcon weight="bold" size={22} className="animate-spin" /> : <PaperclipIcon weight="bold" size={22} />}
           </Button>
         </Tip>
-        <Tip label="Keyboard" hint="Type straight into the pane, key by key">
-          <Button
-            variant="soft"
-            size="icon-lg"
-            aria-label="Keyboard: type straight into the pane"
-            aria-pressed={typing}
-            // Keeps the focus where it is, so pressing it while typing puts the keyboard away.
-            onPointerDown={(e) => e.preventDefault()}
-            onClick={() => useKeyboard.getState().toggle()}
-            className={cn(typing && "bg-mint text-mint-ink hover:bg-mint")}
-          >
-            <KeyboardIcon weight="bold" size={22} />
-          </Button>
-        </Tip>
+        <KeyboardMenu
+          phone={typing}
+          negi={soft}
+          onPhone={() => {
+            useKeyboard.setState({ soft: false });
+            useKeyboard.getState().toggle();
+          }}
+          onNegi={() => {
+            if (typing) useKeyboard.getState().toggle();
+            useKeyboard.setState({ soft: !soft });
+          }}
+        />
         <Tip label="Send" hint="Types the text and presses Enter" keycap="↵">
           <Button type="submit" size="icon-lg" aria-label="Send and press Enter">
             <PaperPlaneTiltIcon weight="fill" size={22} />
@@ -191,4 +196,25 @@ export function KeyDock({ pane }: { pane: string }) {
       </form>
     </div>
   );
+}
+
+const BACK = 0xff08;
+const ENTER = 0xff0d;
+
+/** negi's keyboard under the pane: each key goes in as it is pressed, latched modifiers included. */
+export function PaneSoftKeys({ pane }: { pane: string }) {
+  const ask = useAsk();
+  const key = (name: string) => {
+    const out = take(name);
+    if (out) ask.mutate({ t: "keys", pane, keys: [out] });
+  };
+  const press = (sym: number) => {
+    if (sym === BACK) return key("BSpace");
+    if (sym === ENTER) return key("Enter");
+    const char = String.fromCodePoint(sym >= 0x01000000 ? sym - 0x01000000 : sym);
+    const latched = Object.values(useMods.getState().held).some(Boolean);
+    if (latched && /^[!-~]$/.test(char)) key(char);
+    else ask.mutate({ t: "text", pane, text: char, enter: false });
+  };
+  return <SoftKeys press={press} symOf={(char) => { const point = char.codePointAt(0) ?? 0; return point < 0x100 ? point : 0x01000000 + point; }} />;
 }

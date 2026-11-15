@@ -29,7 +29,8 @@ export const useMods = create<{ held: Record<Mod, boolean>; toggle: (mod: Mod) =
 }));
 
 /** Whether the phone's keyboard is up; the terminal owns its field, the key row its button. */
-export const useKeyboard = create<{ typing: boolean; toggle: () => void }>(() => ({ typing: false, toggle: () => {} }));
+/** The phone's keyboard typing straight into the pane (`typing`), or negi's under it (`soft`). */
+export const useKeyboard = create<{ typing: boolean; soft: boolean; toggle: () => void }>(() => ({ typing: false, soft: false, toggle: () => {} }));
 
 /** The key tmux should get for `key` under what is latched now, spending it. Null when command has nothing for the key. */
 export function take(key: string): string | null {

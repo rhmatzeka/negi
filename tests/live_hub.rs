@@ -11,6 +11,7 @@ use serde_json::Value;
 
 const QUICK: Timing = Timing {
     grace: Duration::from_millis(150),
+    attach_redraw: Duration::ZERO,
 };
 
 /// The next message of kind `t` for which `pick` holds; everything before it is skipped.
