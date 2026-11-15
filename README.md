@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/rifuki/negi/releases/latest"><img src="https://img.shields.io/github/v/release/rifuki/negi?color=39c5bb" alt="Latest release"></a>
   <a href="https://crates.io/crates/negi"><img src="https://img.shields.io/crates/v/negi?color=39c5bb" alt="crates.io"></a>
-  <a href="https://www.npmjs.com/package/negi"><img src="https://img.shields.io/npm/v/negi?color=39c5bb" alt="npm"></a>
+  <a href="https://www.npmjs.com/package/@rifuki/negi"><img src="https://img.shields.io/npm/v/@rifuki/negi?color=39c5bb" alt="npm"></a>
   <a href="LICENSE"><img src="https://img.shields.io/github/license/rifuki/negi?color=39c5bb" alt="MIT"></a>
 </p>
 
@@ -40,7 +40,7 @@ the page over your tailnet; nothing goes through anyone else's server.
 brew install rifuki/tap/negi
 ```
 
-or `npm install -g negi`, or `cargo install negi`. macOS only, Apple silicon and Intel.
+or `npm install -g @rifuki/negi`, or `cargo install negi`. macOS only, Apple silicon and Intel.
 
 ## Get started
 
