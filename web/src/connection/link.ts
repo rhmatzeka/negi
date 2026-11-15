@@ -90,8 +90,6 @@ export function signIn(token: string) {
   useApp.setState({ token, phase: "connecting", problem: "", notice: "" });
 }
 
-// The server calls a pane busy from its first byte, a redraw included; it shows as working
-// only once it has been busy longer than a redraw can last.
 /** The build this page is, as the server wrote it into the page. */
 const loaded = document.querySelector<HTMLMetaElement>('meta[name="negi-build"]')?.content ?? "";
 
@@ -102,7 +100,7 @@ export function outdated(build?: string) {
   return true;
 }
 
-const SUSTAINED_MS = 3200;
+// Working from the server's first report, except a redraw this page caused by resizing.
 const starting = new Map<string, number>();
 
 // Until when a pane's output is known to be a redraw this page caused, by resizing its window.
@@ -119,7 +117,11 @@ export function hush(pane: string) {
 
 function printing(pane: string) {
   if (starting.has(pane) || useApp.getState().busy.includes(pane)) return;
-  const wait = Math.max(0, (hushed.get(pane) ?? 0) - Date.now()) + SUSTAINED_MS;
+  const wait = (hushed.get(pane) ?? 0) - Date.now();
+  if (wait <= 0) {
+    useApp.setState({ busy: [...useApp.getState().busy, pane] });
+    return;
+  }
   starting.set(
     pane,
     window.setTimeout(() => {
@@ -180,7 +182,7 @@ export function receive(msg: Incoming) {
       if (msg.on) {
         printing(msg.pane);
       } else if (starting.has(msg.pane)) {
-        // It stopped before it counted as printing: a redraw, not work.
+        // It went quiet while a redraw of ours was held back: it was the redraw, not work.
         clearTimeout(starting.get(msg.pane));
         starting.delete(msg.pane);
       } else if (state.busy.includes(msg.pane)) {

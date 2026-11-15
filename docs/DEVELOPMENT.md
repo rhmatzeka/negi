@@ -18,6 +18,9 @@ CPU.
 
 The interface is a Vite app in `web/`; its build is embedded in the binary.
 
+Building needs Swift (the Command Line Tools have it): the screen capture crate compiles
+a small Swift bridge, and `build.rs` points the linker at Swift's libraries.
+
 ```sh
 pnpm --dir web install
 pnpm --dir web build          # writes web/dist
@@ -73,13 +76,18 @@ states. Sample data exists in development builds only.
 | Long lists | TanStack Virtual, for a pane's history |
 | Terminal colour | Anser |
 | Motion, icons | GSAP (with Flip), Phosphor |
-| The Mac's screen | noVNC |
+| The Mac's screen | WebCodecs `VideoDecoder` for live video; noVNC for screen sharing |
+| Installing as an app | vite-plugin-pwa (Workbox) |
 
 ## Tests
 
 ```sh
 cargo test
 ```
+
+`NEGI_NO_VIDEO=1` makes the server refuse live video, as a Mac without Screen Recording
+does, and `NEGI_VNC_PORT` points screen sharing at a stand-in: together they check the
+page's fallback without changing any setting.
 
 The live tests start their own tmux servers on private sockets with `-f /dev/null`, so they
 never touch your sessions, your tmux.conf or its plugins. They need tmux installed.

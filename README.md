@@ -40,7 +40,7 @@ the page over your tailnet; nothing goes through anyone else's server.
 brew install rifuki/tap/negi
 ```
 
-or `npm install -g @rifuki/negi`, or `cargo install negi`. macOS only, Apple silicon and Intel.
+or `npm install -g @rifuki/negi`, or `cargo install negi`. macOS 12.3 or later on Apple silicon; on an Intel Mac, `cargo install negi` builds it.
 
 ## Get started
 
@@ -52,8 +52,13 @@ negi tailnet    # serves it on your tailnet and prints its https address
 negi pair       # open that address on the phone and type the code it shows
 ```
 
-For the screen, turn on Screen Sharing (System Settings, General, Sharing). It goes
-through macOS's own VNC today: input is instant, the picture lags; a video stream is next.
+On the phone, Share, Add to Home Screen (or Install app on Android) opens negi full screen
+like an app, and it still opens when the Mac is out of reach.
+
+The screen comes as live video from negi itself. macOS asks once for Screen Recording
+(to see it) and Accessibility (to drive it), for negi or the terminal it runs in. Without
+them negi falls back to Screen Sharing (System Settings, General, Sharing), which asks for
+your Mac login.
 
 ## Safe by default
 
@@ -61,6 +66,9 @@ through macOS's own VNC today: input is instant, the picture lags; a video strea
 - Each phone pairs once with a one-time code that `negi pair` takes back on Ctrl+C;
   `negi revoke` unpairs it.
 - Keys are stored hashed; a kept screen login is sealed by the server for one device.
+- Before live video shows the screen or takes input, each phone gives the Mac's password
+  once. macOS checks it; negi does not keep it, and five wrong tries lock that phone out
+  for five minutes.
 
 [How it works](docs/SPEC.md) · [Development](docs/DEVELOPMENT.md)
 

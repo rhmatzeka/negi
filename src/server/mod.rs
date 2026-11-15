@@ -5,6 +5,8 @@ mod mac;
 mod screen;
 mod socket;
 mod upload;
+#[cfg(target_os = "macos")]
+mod video;
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 use std::net::{Ipv4Addr, SocketAddr};
@@ -14,6 +16,7 @@ use axum::extract::ws::WebSocketUpgrade;
 use axum::extract::{DefaultBodyLimit, Request, State};
 use axum::http::{HeaderMap, Method, StatusCode, header};
 use axum::middleware::{self, Next};
+use axum::serve::ListenerExt;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -61,6 +64,7 @@ pub fn router(app: Arc<App>) -> Router {
         .route("/api/ws", get(upgrade))
         .route("/api/screen", get(screen))
         .route("/api/screen/seal", post(screen::seal))
+        .route("/api/screen/verify", post(verify_screen))
         .route("/api/mac", get(mac::status))
         .route("/api/speed/down", get(mac::down))
         .route(
@@ -77,6 +81,10 @@ pub async fn serve(app: Arc<App>, port: u16) -> std::io::Result<()> {
     let listener =
         tokio::net::TcpListener::bind(SocketAddr::from((Ipv4Addr::LOCALHOST, port))).await?;
     eprintln!("negi listening on http://{}", listener.local_addr()?);
+    // A click, a key or a picture is sent at once, not held back to be sent with the next.
+    let listener = listener.tap_io(|tcp| {
+        let _ = tcp.set_nodelay(true);
+    });
     axum::serve(listener, router(app)).await
 }
 
@@ -214,6 +222,14 @@ fn browser(agent: &str) -> String {
 async fn upgrade(State(app): State<Arc<App>>, ws: WebSocketUpgrade) -> Response {
     ws.max_message_size(MAX_MESSAGE)
         .on_upgrade(move |socket| socket::session(app, socket))
+}
+
+#[cfg(target_os = "macos")]
+use video::verify as verify_screen;
+
+#[cfg(not(target_os = "macos"))]
+async fn verify_screen() -> Response {
+    refuse(StatusCode::NOT_FOUND, "live video is only on macOS")
 }
 
 #[cfg(test)]

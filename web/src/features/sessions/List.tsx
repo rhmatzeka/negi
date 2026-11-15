@@ -18,11 +18,12 @@ import { LinkState } from "@/connection/LinkState";
 import { MacPill } from "@/features/mac/MacSheet";
 import { ThemeToggle } from "@/components/Toggles";
 
-/** The card: how many sessions, counted up to, and whether anything is working. */
+/** The card: how many sessions, counted up to, and how many panes are working. */
 function Summary() {
   const count = useApp((s) => s.sessions.length);
   const windows = useApp((s) => s.sessions.reduce((n, x) => n + x.windows.length, 0));
-  const printing = useApp((s) => s.sessions.filter((x) => sessionBusy(x, s.busy)).length);
+  // Panes, not sessions: two agents working in one session are two at work.
+  const printing = useApp((s) => s.sessions.reduce((n, x) => n + x.windows.reduce((m, w) => m + w.panes.filter((p) => s.busy.includes(p.id)).length, 0), 0));
   const number = useRef<HTMLParagraphElement>(null);
   const shown = useRef(0);
 

@@ -3,5 +3,7 @@
 pub mod hub;
 pub mod server;
 pub mod store;
+#[cfg(target_os = "macos")]
+pub mod stream;
 pub mod tmux;
 pub mod tailnet;

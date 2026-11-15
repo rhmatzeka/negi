@@ -28,7 +28,8 @@ fn vnc() -> SocketAddr {
 }
 const HELLO_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// The first message is `{"token": ..., "sealed"?: ...}`, as text. The answer is
+/// With `"mode": "video"` the first message goes to `video::bridge`. Otherwise it is
+/// `{"token": ..., "sealed"?: ...}`, as text. The answer is
 /// `{"ok": true, "build": ..., "login": ...}` or `{"error": ...}`; after an ok, every binary
 /// message is VNC, both ways. `login` is what `sealed` held, when it was sealed for this device.
 pub(super) async fn bridge(app: Arc<App>, mut ws: WebSocket) {
@@ -38,13 +39,22 @@ pub(super) async fn bridge(app: Arc<App>, mut ws: WebSocket) {
     };
     let token = hello.get("token").and_then(Value::as_str).map(str::to_owned);
     let Some(device) = token.as_deref().and_then(|t| app.store.device(t)) else {
-        let _ = say(&mut ws, json!({ "error": "this device is not paired" })).await;
+        refuse(&mut ws, json!({ "error": "this device is not paired" })).await;
         return;
     };
+    if hello.get("mode").and_then(Value::as_str) == Some("video") {
+        #[cfg(target_os = "macos")]
+        return super::video::bridge(app, ws, device, token.unwrap_or_default(), &hello).await;
+        #[cfg(not(target_os = "macos"))]
+        {
+            refuse(&mut ws, json!({ "error": "live video is only on macOS", "video": false })).await;
+            return;
+        }
+    }
     let vnc = match TcpStream::connect(vnc()).await {
         Ok(stream) => stream,
         Err(_) => {
-            let _ = say(&mut ws, json!({ "error": "screen sharing is off" })).await;
+            refuse(&mut ws, json!({ "error": "screen sharing is off" })).await;
             return;
         }
     };
@@ -94,8 +104,16 @@ pub(super) async fn bridge(app: Arc<App>, mut ws: WebSocket) {
     app.store.audit(&device.id, "screen closed");
 }
 
-async fn say(ws: &mut WebSocket, value: Value) -> Result<(), axum::Error> {
+pub(super) async fn say(ws: &mut WebSocket, value: Value) -> Result<(), axum::Error> {
     ws.send(Message::Text(value.to_string().into())).await
+}
+
+/// Answers with a refusal and closes properly. A socket dropped without a close frame reads
+/// as an error in the browser, after the answer it was meant to read.
+pub(super) async fn refuse(ws: &mut WebSocket, value: Value) {
+    if say(ws, value).await.is_ok() {
+        let _ = ws.send(Message::Close(None)).await;
+    }
 }
 
 /// `POST /api/screen/seal`: seals a screen sharing login for the sending device, which keeps

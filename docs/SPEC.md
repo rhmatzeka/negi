@@ -187,12 +187,36 @@ says how many bytes arrived, both up to 32 MB, for the page to time the phone's 
 host. `POST /api/speed/internet` runs `networkQuality -c -M 20` on the host, one run at a
 time, the result kept for a minute: down and up in Mbps, responsiveness, base round trip.
 
-`GET /api/screen` is a WebSocket to the host's own screen sharing (VNC on
-`127.0.0.1:5900`). Its first message is `{"token": ...}`; the answer is `{"ok": true}` or
-`{"error": ...}`, and from then on every binary message is VNC, carried untouched in both
-directions. negi adds no login of its own to it beyond the device's token: the screen
-sharing server asks for an account's name and password, which the page passes on and does
-not keep. A device unpaired while it watches is cut off within 15 s.
+`GET /api/screen` is a WebSocket to the host's screen, in one of two ways.
+
+Live video, when the first message is `{"token": ..., "mode": "video", "width": 1280}`.
+A device that has not yet proved the Mac's password gets
+`{"error": ..., "password": "<account>"}` instead; `POST /api/screen/verify` with
+`{"password"}` and the device's bearer key has macOS check it (PAM, `checkpw`, for the
+account negi runs as), marks the device, and keeps nothing. Five wrong tries lock that
+device out for five minutes.
+negi captures the main display with ScreenCaptureKit at that width (at most the display's
+own pixels), encodes it with the hardware H.264 encoder (Main profile, real time, no frame
+reordering, low-latency rate control, 3 Mbit/s), without the cursor (the page draws its
+own at once rather than a round trip late), and answers
+`{"ok": true, "video": {"width", "height"}, "input": bool}`. Each binary message after that
+is one picture: a flags byte (1 for a keyframe), its time in microseconds as eight bytes
+big-endian, then the picture in Annex B, SPS and PPS in front of a keyframe. A picture is
+sent only when the screen changed; a keyframe only first, after a picture was dropped, or
+when the page sends `{"key": true}`. With four pictures waiting for the socket the next is
+dropped, and the ones after it until a keyframe. The page sends text: `{"p": [x, y, mask]}`
+moves the pointer in the video's pixels with VNC's button mask (wheel steps as buttons 8
+to 64), `{"k": [keysym, down]}` presses or releases an X11 keysym. negi posts them with
+CGEvent; `input` says whether macOS lets it (Accessibility). When it may not record the
+screen the answer is `{"error": ..., "video": false}`, and the page uses screen sharing.
+
+Screen sharing, otherwise: VNC on `127.0.0.1:5900`. The first message is `{"token": ...}`;
+the answer is `{"ok": true}` or `{"error": ...}`, and from then on every binary message is
+VNC, carried untouched in both directions. negi adds no login of its own to it beyond the
+device's token: the screen sharing server asks for an account's name and password, which
+the page passes on and does not keep.
+
+Either way, a device unpaired while it watches is cut off within 15 s.
 
 ### WebSocket
 

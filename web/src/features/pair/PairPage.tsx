@@ -11,11 +11,13 @@ import { cn } from "@/lib/utils";
 
 const LENGTH = 8;
 
-/** What a person would call this browser: "Safari on iPhone", "Chrome on Mac". */
+/** What a person would call this browser: "Safari on iPhone", "Chrome on Mac", or "negi app
+ * on iPhone" once it is installed, which keeps its own pairing apart from the browser's. */
 function deviceName(): string {
   const ua = navigator.userAgent;
+  const installed = matchMedia("(display-mode: standalone)").matches || (navigator as { standalone?: boolean }).standalone === true;
   const device = /iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Mac/.test(ua) ? "Mac" : /Windows/.test(ua) ? "Windows" : /Linux/.test(ua) ? "Linux" : "";
-  const app = /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
+  const app = installed ? "negi app" : /Edg\//.test(ua) ? "Edge" : /CriOS|Chrome\//.test(ua) ? "Chrome" : /FxiOS|Firefox\//.test(ua) ? "Firefox" : /Safari\//.test(ua) ? "Safari" : "";
   return [app, device].filter(Boolean).join(" on ") || "This browser";
 }
 
@@ -75,24 +77,25 @@ export function PairPage() {
   };
 
   return (
-    <main className="slim-scroll relative grid h-full place-items-center overflow-auto overscroll-none px-4 py-6">
-      <div className="absolute top-[max(12px,var(--safe-top))] right-4">
-        <ThemeToggle />
-      </div>
-      <div className="grid w-full max-w-[880px] gap-4 md:grid-cols-[1fr_1fr] md:items-stretch">
+    <main className="slim-scroll flex h-full flex-col overflow-auto overscroll-none px-4 pt-[max(16px,var(--safe-top))] pb-[max(16px,env(safe-area-inset-bottom))] md:grid md:place-items-center md:py-6">
+      {/* On a phone the two cards fill the screen, Pair at the bottom under the thumb; wider, they sit side by side in the middle. */}
+      <div className="grid w-full max-w-[880px] flex-1 grid-rows-[auto_1fr] gap-4 md:flex-none md:grid-cols-[1fr_1fr] md:grid-rows-none md:items-stretch">
         <section aria-label="negi" className="relative isolate min-h-[230px] overflow-hidden rounded-xl bg-hero px-6 pt-6 pb-6 text-hero-ink md:min-h-[440px]">
           <span aria-hidden className="absolute -top-20 -right-12 -z-10 size-60 rounded-full bg-hero-ink/[0.07]" />
           <span aria-hidden className="absolute top-14 -right-28 -z-10 size-72 rounded-full bg-hero-ink/[0.05]" />
           <div className="flex items-center gap-2.5">
             <Mark size={36} />
             <span className="text-xl font-bold tracking-tight">negi</span>
+            <span className="ml-auto [&_button]:bg-hero-ink/10 [&_button]:text-hero-ink [&_button]:hover:bg-hero-ink/15">
+              <ThemeToggle />
+            </span>
           </div>
           <h1 className="mt-6 max-w-[62%] text-[30px] leading-[1.08] font-semibold text-balance md:mt-10 md:text-[40px]">Your Mac, in your pocket</h1>
           <p className="mt-2 max-w-[55%] text-[15px] font-medium opacity-80">Terminals and the screen, from this phone.</p>
           <Peek className="absolute -right-5 bottom-0 w-[50%] max-w-[230px] translate-y-[6%] md:w-[62%] md:max-w-[300px]" />
         </section>
 
-        <section className="grid content-center gap-5 rounded-xl bg-card p-5 md:p-7">
+        <section className="flex flex-col gap-5 rounded-xl bg-card p-5 md:justify-center md:p-7">
           <h2 className="text-2xl font-semibold">Pair this device</h2>
 
           <Step n={1} title="On your Mac, run">
@@ -162,7 +165,7 @@ export function PairPage() {
             <Input value={label} maxLength={40} onChange={(e) => setLabel(e.currentTarget.value)} />
           </label>
 
-          <Button disabled={code.length !== LENGTH || !label.trim() || pair.isPending} onClick={() => submit()} className="w-full">
+          <Button disabled={code.length !== LENGTH || !label.trim() || pair.isPending} onClick={() => submit()} className="mt-auto w-full md:mt-0">
             {pair.isPending && <CircleNotchIcon weight="bold" size={18} className="animate-spin" />}
             {pair.isPending ? "Pairing" : "Pair"}
           </Button>

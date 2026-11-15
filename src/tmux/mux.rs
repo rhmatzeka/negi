@@ -232,6 +232,43 @@ pub async fn screen(link: &Link, pane: &str) -> Result<Screen, Error> {
     })
 }
 
+/// Which of `panes` show an agent at work on screen. An agent waiting on a long command
+/// can print nothing for a minute while its status line still says it is working.
+pub async fn working(link: &Link, panes: &[String]) -> Result<Vec<String>, Error> {
+    if panes.is_empty() {
+        return Ok(Vec::new());
+    }
+    let replies = link
+        .batch(panes.iter().map(|p| format!("capture-pane -p -t {p}")).collect())
+        .await?;
+    Ok(panes
+        .iter()
+        .zip(replies)
+        .filter(|(_, reply)| reply.as_ref().is_ok_and(|body| agent_at_work(&String::from_utf8_lossy(body))))
+        .map(|(pane, _)| pane.clone())
+        .collect())
+}
+
+/// An agent's "still going" line near the bottom: Claude Code's `✽ Gesticulating… (7m 6s`
+/// from the first column, or Codex's `esc to interrupt`. Quotes in a transcript do not count.
+pub fn agent_at_work(screen: &str) -> bool {
+    let lines: Vec<&str> = screen.lines().filter(|l| !l.trim().is_empty()).collect();
+    lines[lines.len().saturating_sub(8)..].iter().any(|line| {
+        if line.to_ascii_lowercase().contains("esc to interrupt") {
+            return true;
+        }
+        let mut words = line.splitn(3, ' ');
+        let (Some(glyph), Some(verb), Some(rest)) = (words.next(), words.next(), words.next()) else {
+            return false;
+        };
+        glyph.chars().count() == 1
+            && !glyph.chars().all(char::is_alphanumeric)
+            && verb.ends_with('…')
+            && rest.starts_with('(')
+            && rest[1..].starts_with(|c: char| c.is_ascii_digit())
+    })
+}
+
 /// The `count` lines above the screen, oldest first. Empty on the alternate screen.
 pub async fn history(link: &Link, pane: &str, count: u32) -> Result<Vec<String>, Error> {
     need('%', pane)?;
@@ -671,5 +708,22 @@ mod tests {
     fn rows_drop_only_the_final_newline() {
         assert_eq!(rows(b"a\n\nb\n\n"), ["a", "", "b", ""]);
         assert_eq!(rows(b""), Vec::<String>::new());
+    }
+
+    #[test]
+    fn an_agent_at_work_is_read_from_its_status_line() {
+        assert!(agent_at_work("text\n✽ Gesticulating… (7m 6s · ↓ 18.5k tokens)\n  ⎿  Tip"));
+        assert!(agent_at_work("✢ Ideating… (5s · ↓ 1k tokens)"));
+        assert!(agent_at_work("• Working (12s • Esc to interrupt)"));
+        assert!(!agent_at_work("✻ Churned for 5s · done Friday 12:42 PM"));
+        assert!(!agent_at_work("❯ \n  22:46:51 with rifuki in ~"));
+        assert!(!agent_at_work("Loading… (please wait)"));
+        assert!(!agent_at_work("a Thinking… (5s)"));
+        // Quoted in a transcript: indented, or long scrolled up from the bottom.
+        assert!(!agent_at_work("  ✽ Gesticulating… (7m 6s · ↓ 18.5k tokens)\n❯ "));
+        let far = format!("✽ Gesticulating… (7m 6s)\n{}", "line\n".repeat(10));
+        assert!(!agent_at_work(&far));
+        let quoted = format!("it said esc to interrupt\n{}", "line\n".repeat(10));
+        assert!(!agent_at_work(&quoted));
     }
 }

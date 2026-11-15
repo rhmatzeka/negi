@@ -342,7 +342,16 @@ impl Actor {
             .filter(|(_, at)| at.elapsed() >= QUIET)
             .map(|(p, _)| p.clone())
             .collect();
+        // Quiet is not done while an agent's status line still shows (mux::agent_at_work).
+        let still = match (quiet.is_empty(), self.live_link()) {
+            (false, Some(link)) => mux::working(&link, &quiet).await.unwrap_or_default(),
+            _ => Vec::new(),
+        };
         for pane in quiet {
+            if still.contains(&pane) {
+                self.busy.insert(pane, Instant::now());
+                continue;
+            }
             self.busy.remove(&pane);
             self.broadcast(text(&json!({ "t": "busy", "pane": pane, "on": false })));
         }
@@ -425,6 +434,13 @@ impl Actor {
             .map(|p| p.id.as_str())
             .collect();
         self.busy.retain(|pane, _| alive.contains(pane.as_str()));
+        // An agent at work but silent since this server began to listen shows on its screen.
+        let silent: Vec<String> = alive.iter().filter(|p| !self.busy.contains_key(**p)).map(|p| p.to_string()).collect();
+        if let Ok(found) = mux::working(&link, &silent).await {
+            for pane in found {
+                self.busy.insert(pane, Instant::now());
+            }
+        }
         let closed: Vec<String> = self
             .panes
             .keys()

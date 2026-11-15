@@ -37,6 +37,10 @@ pub struct Device {
     /// SHA-256 of the code it was paired with, so `negi pair` can tell its own code was used.
     #[serde(default)]
     pub code: String,
+    /// Proved the Mac's own password once, which live video asks for before it shows the
+    /// screen and takes input. Screen sharing asks for that login itself.
+    #[serde(default)]
+    pub screen: bool,
 }
 
 /// Where a pairing request came from, as the server saw it.
@@ -211,6 +215,7 @@ impl Store {
             via: origin.via.clone(),
             agent: origin.agent.clone(),
             code: sha256(&given),
+            screen: false,
         });
         write(&self.dir.join("devices.json"), &devices)
             .map_err(|e| PairError::Io(e.to_string()))?;
@@ -225,6 +230,16 @@ impl Store {
             None,
             |found, d| if same(&d.hash, &hash) { Some(d) } else { found },
         )
+    }
+
+    /// Lets a device see and drive the screen over live video from now on.
+    pub fn allow_screen(&self, id: &str) -> io::Result<()> {
+        let _guard = self.lock.lock().unwrap();
+        let mut devices = self.devices();
+        for device in devices.iter_mut().filter(|d| d.id == id) {
+            device.screen = true;
+        }
+        write(&self.dir.join("devices.json"), &devices)
     }
 
     pub fn revoke(&self, id: &str) -> io::Result<bool> {

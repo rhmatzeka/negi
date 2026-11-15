@@ -1,4 +1,5 @@
-// The host's own screen, through its screen sharing: seen, and worked with touch.
+// The host's own screen, seen and worked with touch: live video from negi itself, or the
+// host's screen sharing (VNC) when video cannot be had.
 
 import { ArrowClockwiseIcon, PlugsConnectedIcon, PlugsIcon, CaretLeftIcon, DeviceMobileIcon, EyeIcon, EyeSlashIcon, HandPointingIcon, HandsClappingIcon, KeyboardIcon, LockSimpleIcon, UserIcon, WarningCircleIcon } from "@phosphor-icons/react";
 import { useNavigate } from "@tanstack/react-router";
@@ -15,10 +16,12 @@ import { cn } from "@/lib/utils";
 import macCursor from "@/assets/art/cursor.webp";
 import { SoftKeys } from "./SoftKeys";
 import { attach, type Host } from "./trackpad";
+import { canDecode, type VideoAnswer, VideoViewer } from "./video";
 
 const KEY = "flex h-ctl min-w-ctl shrink-0 items-center justify-center gap-1 rounded-sm px-3 font-mono text-sm font-bold";
 
-type Phase = { is: "connecting" } | { is: "asking"; wants: string[]; wrong?: boolean } | { is: "showing" } | { is: "ended"; why: string };
+// `account`: live video asks for the Mac's password of that account, once per device.
+type Phase = { is: "connecting" } | { is: "asking"; wants: string[]; wrong?: boolean; account?: string; problem?: string } | { is: "showing" } | { is: "ended"; why: string };
 
 interface Viewer {
   viewOnly: boolean;
@@ -80,8 +83,14 @@ async function keep(login: Record<string, string>) {
   if (response.ok && body.sealed) kept.set(body.sealed);
 }
 
+/** Video unless the Mac may not be recorded; then screen sharing, until the page reloads. */
+let tryVideo = true;
+
 /** What the page says after the Disconnect button. */
 const STOPPED = "You disconnected. Nothing is shared until you connect again.";
+
+/** How wide the video is sent: sharp enough to zoom into on a phone, light on the link. */
+const VIDEO_WIDTH = 1280;
 
 /** How long the page may be out of sight before it lets go of the screen. */
 const HIDDEN_MS = 20_000;
@@ -113,6 +122,10 @@ export function ScreenPage() {
   // The login just typed is to be kept once the host has accepted it.
   const keeping = useRef(false);
   const [remember, setRemember] = useState(true);
+  // Why video or control is missing, when the Mac's permissions are the reason.
+  const [note, setNote] = useState("");
+  // Screen sharing for the next connection only, after video failed to start.
+  const skipVideo = useRef(false);
 
   useEffect(() => {
     const target = stage.current;
@@ -120,22 +133,62 @@ export function ScreenPage() {
     if (!target || !token) return;
     let live = true;
     let socket: WebSocket | null = null;
-    // Loaded before the socket opens: the screen sharing server speaks right after the ok.
-    void import("@novnc/novnc").then(({ default: RFB }) => {
+    let answered = false;
+    const videoMode = tryVideo && !skipVideo.current && canDecode();
+    skipVideo.current = false;
+    const open = (RFB?: typeof import("@novnc/novnc").default) => {
       if (!live) return;
       const opened = (socket = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/screen`));
       opened.binaryType = "arraybuffer";
-      opened.onopen = () => opened.send(JSON.stringify({ token, sealed: kept.get() }));
-      opened.onerror = () => live && setPhase({ is: "ended", why: "negi could not reach the screen." });
+      opened.onopen = () => opened.send(JSON.stringify(videoMode ? { token, mode: "video", width: VIDEO_WIDTH } : { token, sealed: kept.get() }));
+      // An error after the server has answered is the close that follows its answer.
+      opened.onerror = () => live && !answered && setPhase({ is: "ended", why: "negi could not reach the screen." });
       connect(opened, RFB);
-    });
-    const connect = (socket: WebSocket, RFB: typeof import("@novnc/novnc").default) => {
-    // The server's first word says whether screen sharing can be had; the VNC client takes the socket from there.
+    };
+    const dropped = () => {
+      if (!live || asleep.current || stopped.current) return;
+      // Signed in before, or on video: a dropped line (the phone asleep, the server restarted) is picked up again.
+      if ((remembered || videoMode) && retries.current < RETRIES) {
+        retries.current += 1;
+        setPhase({ is: "connecting" });
+        window.setTimeout(() => live && setAttempt((n) => n + 1), 600 * retries.current);
+        return;
+      }
+      setPhase((p) => (p.is === "asking" && p.wrong ? p : { is: "ended", why: "The connection to your screen dropped." }));
+    };
+    const connect = (socket: WebSocket, RFB?: typeof import("@novnc/novnc").default) => {
+    // The server's first word says whether the screen can be had, and how.
     socket.onmessage = (first) => {
-      const answer = JSON.parse(String(first.data)) as { ok?: boolean; error?: string; build?: string; login?: Record<string, string> | null };
+      answered = true;
+      const answer = JSON.parse(String(first.data)) as VideoAnswer & { login?: Record<string, string> | null };
       if (answer.login && !remembered) remembered = answer.login;
       if (outdated(answer.build)) return;
-      if (!answer.ok) {
+      if (answer.video === false) {
+        // Screen sharing instead: for good when the Mac may not be recorded, for this
+        // connection only when the capture failed for another reason.
+        socket.close();
+        const where = `System Settings, Privacy & Security${mac ? " on your Mac" : ""}`;
+        if (answer.error?.includes("record")) {
+          tryVideo = false;
+          setNote(`Live video needs Screen Recording for negi in ${where}. Showing screen sharing instead.`);
+        } else {
+          skipVideo.current = true;
+          setNote("Live video did not start this time, so this is screen sharing. Reconnect to try video again.");
+        }
+        return live && setAttempt((n) => n + 1);
+      }
+      if (answer.password !== undefined) {
+        socket.close();
+        return live && setPhase({ is: "asking", wants: ["password"], account: answer.password });
+      }
+      if (answer.ok && answer.video) {
+        retries.current = 0;
+        setNote(answer.input === false ? `To control it, allow negi in System Settings, Privacy & Security, Accessibility${mac ? " on your Mac" : ""}.` : "");
+        viewer.current = new VideoViewer(target, socket, answer.video, dropped);
+        setPhase({ is: "showing" });
+        return;
+      }
+      if (!answer.ok || !RFB) {
         socket.close();
         const off = answer.error === "screen sharing is off";
         return live && setPhase({ is: "ended", why: off ? `Screen sharing is off. Turn it on in System Settings, General, Sharing${mac ? " on your Mac" : ""}.` : (answer.error ?? "Refused.") });
@@ -161,17 +214,7 @@ export function ScreenPage() {
         kept.drop();
         setPhase({ is: "asking", wants: ["username", "password"], wrong: true });
       });
-      rfb.addEventListener("disconnect", () => {
-        if (!live || asleep.current || stopped.current) return;
-        // Signed in before: a dropped line (the phone asleep, the server restarted) is picked up again.
-        if (remembered && retries.current < RETRIES) {
-          retries.current += 1;
-          setPhase({ is: "connecting" });
-          window.setTimeout(() => live && setAttempt((n) => n + 1), 600 * retries.current);
-          return;
-        }
-        setPhase((p) => (p.is === "asking" && p.wrong ? p : { is: "ended", why: "The connection to your screen dropped." }));
-      });
+      rfb.addEventListener("disconnect", dropped);
       // The Mac sends its cursor's shape apart from the picture; it is drawn at the pointer,
       // hot spot on the point.
       const own = (rfb as unknown as { _updateCursor: (rgba: Uint8Array, hx: number, hy: number, w: number, h: number) => void })._updateCursor.bind(rfb);
@@ -193,6 +236,9 @@ export function ScreenPage() {
       viewer.current = rfb;
     };
     };
+    // Screen sharing's client is loaded before the socket opens: its server speaks right after the ok.
+    if (videoMode) open();
+    else void import("@novnc/novnc").then(({ default: RFB }) => open(RFB));
     return () => {
       live = false;
       viewer.current?.disconnect();
@@ -341,9 +387,24 @@ export function ScreenPage() {
     for (const char of value.replace("\u200b", "")) key(char === "\n" ? SYM.enter : symOf(char));
   };
 
+  // Live video: the Mac checks its own password, and lets this phone in from then on.
+  const [proving, setProving] = useState(false);
+  const prove = async (account: string, password: string) => {
+    setProving(true);
+    const response = await fetch("/api/screen/verify", { method: "POST", headers: { Authorization: `Bearer ${useApp.getState().token}`, "Content-Type": "application/json" }, body: JSON.stringify({ password }) }).catch(() => null);
+    setProving(false);
+    if (response?.ok) {
+      setPhase({ is: "connecting" });
+      return setAttempt((n) => n + 1);
+    }
+    const body = (await response?.json().catch(() => ({}))) as { error?: string } | undefined;
+    setPhase({ is: "asking", wants: ["password"], account, wrong: response?.status === 403, problem: response?.status === 403 ? undefined : (body?.error ?? "negi could not reach your Mac") });
+  };
+
   const signIn = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    if (phase.is === "asking" && phase.account !== undefined) return void prove(phase.account, String(form.get("password") ?? ""));
     const given = { username: String(form.get("username") ?? ""), password: String(form.get("password") ?? "") };
     remembered = given;
     keeping.current = remember;
@@ -366,7 +427,7 @@ export function ScreenPage() {
   }, [phase]);
 
   return (
-    <main className="flex h-full flex-col gap-3 px-3 pt-3 pb-[max(12px,env(safe-area-inset-bottom))]">
+    <main className="flex h-full flex-col gap-3 px-3 pt-[max(12px,var(--safe-top))] pb-[max(12px,env(safe-area-inset-bottom))]">
       <header className="flex shrink-0 items-center gap-2">
         <Button variant="soft" size="icon" aria-label="Back to sessions" onClick={() => navigate({ to: "/" })}>
           <CaretLeftIcon weight="bold" size={20} />
@@ -394,6 +455,12 @@ export function ScreenPage() {
           </Tip>
         )}
       </header>
+      {note && (phase.is === "showing" || phase.is === "ended") && (
+        <p role="status" className="flex shrink-0 items-start gap-1.5 px-1 text-sm text-muted-foreground">
+          <WarningCircleIcon weight="fill" size={16} className="mt-0.5 shrink-0" />
+          {note}
+        </p>
+      )}
       <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-term">
         <div ref={stage} className="pointer-events-none absolute inset-0">
           <div ref={pointer} hidden className="absolute top-0 left-0 z-10 size-0">
@@ -453,11 +520,13 @@ export function ScreenPage() {
             <Pose art={phase.wrong ? "locked" : "remote"} className="size-[112px]" />
             <div className="grid justify-items-center gap-1 text-center">
               <p className="text-lg font-semibold">{mac ? "Sign in to your Mac" : "Sign in to your computer"}</p>
-              {phase.wrong ? (
+              {phase.wrong || phase.problem ? (
                 <p role="alert" className="flex items-center gap-1.5 text-sm font-medium text-destructive">
                   <WarningCircleIcon weight="fill" size={16} />
-                  Wrong name or password
+                  {phase.problem ?? (phase.account !== undefined ? "Wrong password" : "Wrong name or password")}
                 </p>
+              ) : phase.account !== undefined ? (
+                <p className="text-sm text-balance text-muted-foreground">The password of {phase.account || "your account"}, once for this phone. It is checked by the Mac and not kept.</p>
               ) : (
                 <p className="text-sm text-muted-foreground">{mac ? "Your Mac login. Forgotten on reload." : "Its own login. Forgotten on reload."}</p>
               )}
@@ -475,12 +544,14 @@ export function ScreenPage() {
                 {reveal ? <EyeSlashIcon weight="bold" size={18} /> : <EyeIcon weight="bold" size={18} />}
               </button>
             </label>
-            <div className="flex w-full items-center justify-between gap-3 px-1 text-sm font-medium">
-              Remember on this phone
-              <Switch label="Remember on this phone" checked={remember} onChange={setRemember} />
-            </div>
-            <Button type="submit" className="w-full">
-              Sign in
+            {phase.account === undefined && (
+              <div className="flex w-full items-center justify-between gap-3 px-1 text-sm font-medium">
+                Remember on this phone
+                <Switch label="Remember on this phone" checked={remember} onChange={setRemember} />
+              </div>
+            )}
+            <Button type="submit" className="w-full" disabled={proving}>
+              {proving ? "Checking" : "Sign in"}
             </Button>
           </form>
         )}
