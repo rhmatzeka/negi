@@ -133,7 +133,7 @@ pub async fn tree(link: &Link) -> Result<Vec<Session>, Error> {
     ];
     let mut out = Vec::with_capacity(4);
     for reply in link.batch(lines).await? {
-        out.push(text(&reply?));
+        out.push(listing(&reply?));
     }
     Ok(parse_tree(&out[0], &out[1], &out[2], &out[3]))
 }
@@ -561,6 +561,12 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// A `-F` listing split on [`SEP`]. tmux 3.5 prints control characters in a format as
+/// octal escapes, so the separator arrives as the four characters `\037`; turn it back.
+fn listing(bytes: &[u8]) -> String {
+    text(bytes).replace("\\037", &SEP.to_string())
+}
+
 fn rows(body: &[u8]) -> Vec<String> {
     let mut lines: Vec<String> = body.split(|b| *b == b'\n').map(text).collect();
     // The block ends with a newline, which is not an extra row.
@@ -576,6 +582,15 @@ mod tests {
 
     fn join(fields: &[&str]) -> String {
         fields.join(&SEP.to_string())
+    }
+
+    #[test]
+    fn a_separator_tmux_escaped_still_splits() {
+        let escaped = b"$1\\0371\n$2\\037two\n";
+        let sessions = listing(escaped);
+        let tree = parse_tree(&sessions, "", "", "");
+        assert_eq!(tree.iter().map(|s| s.name.as_str()).collect::<Vec<_>>(), ["1", "two"]);
+        assert_eq!(listing(join(&["$0", "raw"]).as_bytes()), join(&["$0", "raw"]));
     }
 
     #[test]
