@@ -48,10 +48,13 @@ export function Terminal({ pane }: { pane: string }) {
     const el = stage.current;
     if (!screen || !el) return;
     const width = (el.clientWidth - 24) / (screen.cols * columnWidth());
+    // A full-screen program has no history to scroll to, and its wheel is its own: the whole
+    // screen fits the box, so the box never scrolls under it.
+    const height = screen.alt ? (el.clientHeight - 24) / (screen.rows * 1.25) : Infinity;
     // Sized for the phone, the window has as many columns as fit at this size, so the size is fixed.
     // As is, every pane reads at that same size, smaller only when it would not fit the width
     // (never under 9px: a wider one scrolls sideways); a narrower one sits in the middle.
-    setSize(fitted ? (fitPx ?? FIT_PX * zoom) : Math.max(9, Math.min(FIT_PX, width)) * zoom);
+    setSize(fitted ? (fitPx ?? FIT_PX * zoom) : Math.max(9, Math.min(FIT_PX, width, height)) * zoom);
   }, [pane, zoom, fitted, fitPx]);
 
   // "Fit": the window in tmux is given as many columns and rows as this box holds, so the
@@ -239,8 +242,11 @@ export function Terminal({ pane }: { pane: string }) {
   // A trackpad sends dozens of small wheel events a second, and keeps sending as it coasts:
   // their distance is added up and goes out a whole row at a time, at most once a frame.
   const spin = useRef({ spare: 0, lines: 0, frame: 0 });
-  const roll = (e: React.WheelEvent) => {
+  const roll = (e: WheelEvent) => {
     if (!screenOf(pane)?.alt) return;
+    // The wheel is the program's: the box itself must not scroll too, or the two move against
+    // each other and the screen shakes.
+    e.preventDefault();
     // A sideways swipe (back, another tab or Space) carries a little up-and-down jitter; read
     // as rows it would scroll the program up, down, up.
     if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
@@ -256,6 +262,31 @@ export function Terminal({ pane }: { pane: string }) {
       s.frame = 0;
     });
   };
+  // React listens to wheel and touchmove passively, where preventDefault does nothing; these
+  // are added to the box directly so a full-screen program's scroll stays out of the page's.
+  const rollRef = useRef(roll);
+  rollRef.current = roll;
+  useEffect(() => {
+    const el = stage.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => rollRef.current(e);
+    let start = { x: 0, y: 0 };
+    const onStart = (e: TouchEvent) => (start = { x: e.touches[0].clientX, y: e.touches[0].clientY });
+    const onMove = (e: TouchEvent) => {
+      const dx = Math.abs(e.touches[0].clientX - start.x);
+      const dy = Math.abs(e.touches[0].clientY - start.y);
+      // An up-and-down drag is the program's; a sideways one still pans a pane wider than the phone.
+      if (screenOf(pane)?.alt && dy > dx) e.preventDefault();
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("touchstart", onStart, { passive: true });
+    el.addEventListener("touchmove", onMove, { passive: false });
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("touchstart", onStart);
+      el.removeEventListener("touchmove", onMove);
+    };
+  }, [pane]);
   const wheel = (lines: number) => {
     const screen = screenOf(pane);
     if (screen) void request({ t: "wheel", pane, x: Math.floor(screen.cols / 2), y: Math.floor(screen.rows / 2), lines }).catch(() => {});
@@ -334,6 +365,7 @@ export function Terminal({ pane }: { pane: string }) {
       // drag is passed to it as turns of the mouse wheel: a finger moving down shows what is above.
       onTouchMove={(e) => {
         if (!screenOf(pane)?.alt) return;
+        e.stopPropagation();
         const y = e.touches[0].clientY;
         drag.current.spare += y - drag.current.y;
         drag.current.y = y;
@@ -343,7 +375,6 @@ export function Terminal({ pane }: { pane: string }) {
           wheel(-lines);
         }
       }}
-      onWheel={roll}
       onTouchEnd={() => (touching.current = false)}
       onTouchCancel={() => (touching.current = false)}
       style={{ "--fs": `${size.toFixed(2)}px`, viewTransitionName: "stage" } as React.CSSProperties}
