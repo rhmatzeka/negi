@@ -484,6 +484,7 @@ async fn serve(socket: Socket, port: u16, config: Config, watch: Option<Option<n
     let tmux = Tmux::find(socket)?;
     let app = Arc::new(App {
         hub: Hub::start(tmux.clone(), Timing::default()),
+        fits: Default::default(),
         store: store()?,
         tmux,
         config,

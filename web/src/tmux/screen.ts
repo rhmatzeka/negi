@@ -138,6 +138,7 @@ export class Screen {
     let used = this.lines.length;
     while (used > 0 && plain(this.lines[used - 1]).trim() === "") used--;
     this.el.style.setProperty("--used", String(Math.max(used, y + 1, 1)));
+    this.el.style.setProperty("--rows", String(Math.max(this.lines.length, 1)));
   }
 
   /** The last `count` rows that hold any text, for a preview. */

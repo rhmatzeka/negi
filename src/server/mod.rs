@@ -1,5 +1,6 @@
 //! The HTTP and WebSocket front. Binds loopback only; a tailnet proxy is the way in.
 
+mod fits;
 mod guard;
 mod mac;
 mod screen;
@@ -45,6 +46,8 @@ pub struct Config {
 
 pub struct App {
     pub hub: Hub,
+    /// Windows phones have sized for themselves; see [`fits`].
+    pub fits: fits::Fits,
     pub store: Store,
     pub tmux: Tmux,
     pub config: Config,

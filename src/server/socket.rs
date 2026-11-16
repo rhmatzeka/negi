@@ -1,7 +1,7 @@
 //! One paired device's WebSocket: what it may ask for, and how each request is answered.
 
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use axum::extract::ws::{Message, WebSocket};
@@ -9,6 +9,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::mpsc;
 
+use super::fits::After;
 use super::{App, VERSION};
 use crate::store::Device;
 use crate::tmux::link::{Error, Link};
@@ -132,16 +133,13 @@ pub(super) async fn session(app: Arc<App>, mut ws: WebSocket) {
     // holds back the screen updates going the other way.
     let (work, mut queue) = mpsc::channel::<In>(MAX_QUEUED);
     let (done, mut replies) = mpsc::channel::<Value>(MAX_QUEUED);
-    // Panes whose windows this phone has sized for itself. Kept here, outside the worker,
-    // because they have to be given back when the socket ends, however it ends.
-    let fitted = Arc::new(Mutex::new(HashSet::<String>::new()));
     let worker = tokio::spawn({
-        let (app, device, fitted) = (app.clone(), device.clone(), fitted.clone());
+        let (app, device) = (app.clone(), device.clone());
         async move {
             let mut watched = HashSet::new();
             while let Some(request) = queue.recv().await {
                 if let Some(reply) =
-                    handle(&app, &device, client, &mut watched, &fitted, request).await
+                    handle(&app, &device, client, &mut watched, request).await
                     && done.send(reply).await.is_err()
                 {
                     break;
@@ -192,15 +190,9 @@ pub(super) async fn session(app: Arc<App>, mut ws: WebSocket) {
         }
     }
     worker.abort();
-    let left: Vec<String> = fitted
-        .lock()
-        .map(|mut set| set.drain().collect())
-        .unwrap_or_default();
-    for pane in left {
-        let _ = with_link(&app, async |l| {
-            mux::unfit(&l, &pane).await.map(|()| json!({}))
-        })
-        .await;
+    // However the socket ended, the windows it sized are let go of.
+    for pane in app.fits.held_by(client) {
+        let _ = let_go(&app, &pane, client).await;
     }
     app.hub.leave(client);
 }
@@ -228,12 +220,29 @@ async fn say(ws: &mut WebSocket, value: &Value) -> Result<(), axum::Error> {
     ws.send(Message::Text(value.to_string().into())).await
 }
 
+/// `client` stops showing `pane` fitted: the window takes the size of a phone still showing
+/// it, or goes back to tmux when none is left.
+async fn let_go(app: &App, pane: &str, client: u64) -> Result<Value, Error> {
+    match app.fits.release(pane, client) {
+        After::Keep => Ok(json!({})),
+        After::Size(cols, rows) => {
+            with_link(app, async |l| {
+                mux::fit(&l, pane, cols, rows).await.map(|()| json!({}))
+            })
+            .await
+        }
+        After::Free => {
+            with_link(app, async |l| mux::unfit(&l, pane).await.map(|()| json!({})))
+                .await
+        }
+    }
+}
+
 async fn handle(
     app: &App,
     device: &Device,
     client: u64,
     watched: &mut HashSet<String>,
-    fitted: &Mutex<HashSet<String>>,
     request: In,
 ) -> Option<Value> {
     let (id, result) = match request {
@@ -408,25 +417,12 @@ async fn handle(
                 mux::fit(&l, &pane, cols, rows).await.map(|()| json!({}))
             })
             .await;
-            if result.is_ok()
-                && let Ok(mut set) = fitted.lock()
-            {
-                set.insert(pane);
+            if result.is_ok() {
+                app.fits.hold(&pane, client, cols, rows);
             }
             (id, result)
         }
-        In::Unfit { id, pane } => {
-            if let Ok(mut set) = fitted.lock() {
-                set.remove(&pane);
-            }
-            (
-                id,
-                with_link(app, async |l| {
-                    mux::unfit(&l, &pane).await.map(|()| json!({}))
-                })
-                .await,
-            )
-        }
+        In::Unfit { id, pane } => (id, let_go(app, &pane, client).await),
         In::KillPane { id, pane } => {
             app.store.audit(&device.id, &format!("kill-pane {pane}"));
             (

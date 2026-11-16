@@ -363,6 +363,10 @@
   height: calc(24px + var(--used, 1) * 1.25em);
   overflow: hidden;
 }
+/* Fitted, the window is exactly the box, so every row shows and the padding is even. */
+[data-fitted] .term-screen {
+  height: calc(24px + var(--rows, 1) * 1.25em);
+}
 .term-row {
   height: 1.25em;
 }

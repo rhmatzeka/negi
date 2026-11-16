@@ -37,6 +37,7 @@ async fn start(s: &Scratch) -> Running {
         trusted_users: vec!["me@example.com".into()],
     };
     let app = Arc::new(App {
+        fits: Default::default(),
         hub: Hub::start(
             s.tmux.clone(),
             Timing {

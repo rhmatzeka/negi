@@ -37,6 +37,8 @@ export function Terminal({ pane }: { pane: string }) {
   const { lines: history, quiet, answered, reload } = useEarlier(pane);
   // A session no computer shows has no size of its own worth keeping, so it fills this screen.
   const fitted = useApp((s) => s.view === "fit" || findPane(s.sessions, pane)?.session.attached === false);
+  // Fitted, the text is sized so whole rows fill the box's height, with no strip left under the last.
+  const [fitPx, setFitPx] = useState<number | null>(null);
 
   /** Sizes the text so the pane's columns fill the width, then applies the chosen zoom.
    * The fitted size never goes under 9px; a pane wider than that scrolls sideways. */
@@ -47,8 +49,8 @@ export function Terminal({ pane }: { pane: string }) {
     const width = (el.clientWidth - 24) / (screen.cols * columnWidth());
     const wide = matchMedia("(min-width: 960px)").matches;
     // Sized for the phone, the window has as many columns as fit at this size, so the size is fixed.
-    setSize(fitted ? FIT_PX * zoom : Math.max(9, Math.min(wide ? 16 : 14, width)) * zoom);
-  }, [pane, zoom, fitted]);
+    setSize(fitted ? (fitPx ?? FIT_PX * zoom) : Math.max(9, Math.min(wide ? 16 : 14, width)) * zoom);
+  }, [pane, zoom, fitted, fitPx]);
 
   // "Fit": the window in tmux is given as many columns and rows as this box holds, so the
   // programs in it lay themselves out for it. It is given back on leaving the pane or the mode.
@@ -58,11 +60,14 @@ export function Terminal({ pane }: { pane: string }) {
     let asked = "";
     let timer = 0;
     const ask = () => {
-      const px = FIT_PX * zoom;
+      const rows = Math.floor((el.clientHeight - 24) / (FIT_PX * zoom * 1.25));
+      // The size that makes those rows fill the height exactly: at most 1/rows over the chosen one.
+      const px = (el.clientHeight - 24) / (Math.max(rows, 1) * 1.25);
       // One column fewer than fits: a rounding of a fraction of a pixel must not cost a scroll bar.
       const cols = Math.floor((el.clientWidth - 24) / (px * columnWidth())) - 1;
-      const rows = Math.floor((el.clientHeight - 24) / (px * 1.25));
-      if (cols < 20 || rows < 5 || asked === `${cols}x${rows}`) return;
+      if (cols < 20 || rows < 5) return;
+      setFitPx(px);
+      if (asked === `${cols}x${rows}`) return;
       asked = `${cols}x${rows}`;
       // Until the window has its new size the screen is the old, wider one; it is kept out
       // of sight for that moment, so the reflow is not watched.
@@ -82,7 +87,16 @@ export function Terminal({ pane }: { pane: string }) {
     });
     observer.observe(el);
     ask();
+    // A socket that dropped (Chrome throttles a tab out of sight) took its fit with it; the
+    // server gave the window back, so the new socket asks again even at the same size.
+    const off = useApp.subscribe((now, before) => {
+      if (now.phase === "ready" && before.phase !== "ready") {
+        asked = "";
+        ask();
+      }
+    });
     return () => {
+      off();
       observer.disconnect();
       clearTimeout(timer);
       hush(pane);
@@ -306,6 +320,7 @@ export function Terminal({ pane }: { pane: string }) {
       onTouchEnd={() => (touching.current = false)}
       onTouchCancel={() => (touching.current = false)}
       style={{ "--fs": `${size.toFixed(2)}px`, viewTransitionName: "stage" } as React.CSSProperties}
+      data-fitted={fitted || undefined}
       className={cn(
         "slim-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-none rounded-lg [overflow-anchor:none] bg-term text-term-fg outline-none dark:ring-1 dark:ring-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         // A fitted window has no more columns than the box, so there is nothing to scroll sideways to.
