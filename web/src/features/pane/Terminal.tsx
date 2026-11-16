@@ -404,7 +404,6 @@ export function Terminal({ pane }: { pane: string }) {
       <div ref={host} />
       </div>
       {(!ready || settling || !answered) && (
-        // Shown only once a read takes longer than a blink, so a quick one does not flash.
         <p role="status" className="appear-late absolute inset-0 grid place-content-center justify-items-center gap-1 text-xs font-medium text-[#8a93b8]">
           <Pose art="loading" className="size-24" />
           Reading the screen

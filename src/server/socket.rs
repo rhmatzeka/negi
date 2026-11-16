@@ -190,7 +190,6 @@ pub(super) async fn session(app: Arc<App>, mut ws: WebSocket) {
         }
     }
     worker.abort();
-    // However the socket ended, the windows it sized are let go of.
     for pane in app.fits.held_by(client) {
         let _ = let_go(&app, &pane, client).await;
     }
