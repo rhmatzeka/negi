@@ -399,6 +399,16 @@
 
 /* The working mark: a strip of eight square frames, shown one at a time. Pixel art, so it
    is scaled without smoothing. */
+/* Fades in after a quarter second: what finishes sooner never shows. */
+.appear-late {
+  animation: appear-late 0.2s ease-out 0.25s both;
+}
+@keyframes appear-late {
+  from {
+    opacity: 0;
+  }
+}
+
 .working-mark {
   display: inline-block;
   width: var(--s);

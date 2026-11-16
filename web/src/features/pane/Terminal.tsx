@@ -1,11 +1,12 @@
 // The open pane: its live screen, the history above it, and a hardware keyboard.
 
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { ArrowDownIcon, CircleNotchIcon } from "@phosphor-icons/react";
+import { ArrowDownIcon } from "@phosphor-icons/react";
 import { type KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { hush, onScreen, request, screenOf } from "@/connection/link";
 import { calm } from "@/lib/anim";
+import { Pose } from "@/components/State";
 import { useApp } from "@/lib/store";
 import { findPane } from "@/tmux/tree";
 import { cn } from "@/lib/utils";
@@ -345,8 +346,9 @@ export function Terminal({ pane }: { pane: string }) {
       <div ref={host} />
       </div>
       {(!ready || settling || !answered) && (
-        <p role="status" className="absolute inset-0 grid place-content-center justify-items-center gap-2 text-sm font-medium text-[#8a93b8]">
-          <CircleNotchIcon weight="bold" size={22} className="animate-spin" />
+        // Shown only once a read takes longer than a blink, so a quick one does not flash.
+        <p role="status" className="appear-late absolute inset-0 grid place-content-center justify-items-center gap-1 text-xs font-medium text-[#8a93b8]">
+          <Pose art="loading" className="size-24" />
           Reading the screen
         </p>
       )}
