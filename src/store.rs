@@ -80,8 +80,7 @@ pub enum PairError {
 
 pub struct Store {
     dir: PathBuf,
-    // Read-modify-write is serialised within this process here, and with the other negi
-    // processes on the same directory (`negi pair`, `negi revoke`) by `locked`.
+    // With `locked`, serialises read-modify-write here and with other negi processes.
     lock: Mutex<()>,
 }
 
