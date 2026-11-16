@@ -101,6 +101,9 @@ jobs:
         id: crates
         uses: rust-lang/crates-io-auth-action@3268eb413133e2960fa4ae0e963ca76380c54cd9 # v1.0.6
       - if: vars.PUBLISH_CRATES == 'true'
+        # crates.io takes only so many versions of a crate a day (429); a refusal there must not
+        # hold back npm, the tap and the Linux build. The next version reaches crates.io instead.
+        continue-on-error: true
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.crates.outputs.token }}
         run: cargo publish --allow-dirty
