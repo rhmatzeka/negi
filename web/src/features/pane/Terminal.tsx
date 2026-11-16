@@ -232,6 +232,26 @@ export function Terminal({ pane }: { pane: string }) {
     setTimeout(() => (jumping.current = false), 2500);
   };
   const drag = useRef({ y: 0, spare: 0 });
+  // A trackpad sends dozens of small wheel events a second, and keeps sending as it coasts:
+  // their distance is added up and goes out a whole row at a time, at most once a frame.
+  const spin = useRef({ spare: 0, lines: 0, frame: 0 });
+  const roll = (e: React.WheelEvent) => {
+    if (!screenOf(pane)?.alt) return;
+    // A sideways swipe (back, another tab or Space) carries a little up-and-down jitter; read
+    // as rows it would scroll the program up, down, up.
+    if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) return;
+    const s = spin.current;
+    s.spare += e.deltaMode === 0 ? e.deltaY : e.deltaY * rowHeight;
+    const lines = Math.trunc(s.spare / rowHeight);
+    if (!lines) return;
+    s.spare -= lines * rowHeight;
+    s.lines += lines;
+    s.frame ||= requestAnimationFrame(() => {
+      if (s.lines) wheel(s.lines);
+      s.lines = 0;
+      s.frame = 0;
+    });
+  };
   const wheel = (lines: number) => {
     const screen = screenOf(pane);
     if (screen) void request({ t: "wheel", pane, x: Math.floor(screen.cols / 2), y: Math.floor(screen.rows / 2), lines }).catch(() => {});
@@ -317,7 +337,7 @@ export function Terminal({ pane }: { pane: string }) {
           wheel(-lines);
         }
       }}
-      onWheel={(e) => screenOf(pane)?.alt && wheel(Math.sign(e.deltaY) * Math.max(1, Math.round(Math.abs(e.deltaY) / 40)))}
+      onWheel={roll}
       onTouchEnd={() => (touching.current = false)}
       onTouchCancel={() => (touching.current = false)}
       style={{ "--fs": `${size.toFixed(2)}px`, viewTransitionName: "stage" } as React.CSSProperties}
