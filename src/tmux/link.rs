@@ -181,6 +181,11 @@ impl Link {
     }
 }
 
+/// Bounds on what tmux may send before this link gives up on it and the hub opens another:
+/// a line far longer than tmux ever writes, and a reply above 20 000 coloured history lines.
+const MAX_LINE: u64 = 4 << 20;
+const MAX_REPLY: usize = 64 << 20;
+
 async fn read(
     stdout: ChildStdout,
     shared: Arc<Shared>,
@@ -193,8 +198,9 @@ async fn read(
     let mut block: Option<Block> = None;
     loop {
         line.clear();
-        match reader.read_until(b'\n', &mut line).await {
+        match (&mut reader).take(MAX_LINE).read_until(b'\n', &mut line).await {
             Ok(0) | Err(_) => break,
+            Ok(n) if n as u64 == MAX_LINE && line.last() != Some(&b'\n') => break,
             Ok(_) => {}
         }
         if line.last() == Some(&b'\n') {
@@ -216,6 +222,7 @@ async fn read(
                         }
                     }
                 }
+                None if open.body.len() + line.len() >= MAX_REPLY => break,
                 None => {
                     open.body.extend_from_slice(&line);
                     open.body.push(b'\n');

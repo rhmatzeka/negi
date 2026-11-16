@@ -1,0 +1,5 @@
+# Patched versions of two build-tool dependencies (the shadcn CLI's ts-morph, workbox-build),
+# ahead of the packages that pull them in.
+overrides:
+  "minimatch@>=7.0.0 <11.0.1": "^11.0.1"
+  "glob@>=9.0.0 <14.0.2": "^14.0.2"

@@ -80,8 +80,15 @@ pub enum PairError {
 
 pub struct Store {
     dir: PathBuf,
-    // Serialises read-modify-write within this process.
+    // Read-modify-write is serialised within this process here, and with the other negi
+    // processes on the same directory (`negi pair`, `negi revoke`) by `locked`.
     lock: Mutex<()>,
+}
+
+/// Held for one read-modify-write; closing the file lets the next process in.
+struct Locked<'a> {
+    _here: std::sync::MutexGuard<'a, ()>,
+    _file: fs::File,
 }
 
 impl Store {
@@ -112,6 +119,20 @@ impl Store {
         &self.dir
     }
 
+    fn locked(&self) -> io::Result<Locked<'_>> {
+        let here = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        let file = fs::OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .mode(0o600)
+            .open(self.dir.join(".lock"))?;
+        if unsafe { libc::flock(std::os::fd::AsRawFd::as_raw_fd(&file), libc::LOCK_EX) } != 0 {
+            return Err(io::Error::last_os_error());
+        }
+        Ok(Locked { _here: here, _file: file })
+    }
+
     pub fn devices(&self) -> Vec<Device> {
         read(&self.dir.join("devices.json")).unwrap_or_default()
     }
@@ -124,6 +145,7 @@ impl Store {
             .iter()
             .map(|b| CODE_ALPHABET[(b & 31) as usize] as char)
             .collect();
+        let _guard = self.locked()?;
         let pending = Pending {
             hash: sha256(&code),
             expires: now() + CODE_SECONDS,
@@ -156,7 +178,7 @@ impl Store {
 
     /// Drops the pending code if it is still this one. Another `negi pair`'s code is left alone.
     pub fn cancel_pairing(&self, code: &str) -> io::Result<bool> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.locked()?;
         let path = self.dir.join("pair.json");
         match read::<Pending>(&path) {
             Some(p) if same(&p.hash, &sha256(code)) => fs::remove_file(&path).map(|()| true),
@@ -175,7 +197,7 @@ impl Store {
         if label.is_empty() || label.chars().count() > 40 || label.chars().any(char::is_control) {
             return Err(PairError::BadLabel);
         }
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.locked().map_err(|e| PairError::Io(e.to_string()))?;
         let path = self.dir.join("pair.json");
         let Some(mut pending) = read::<Pending>(&path) else {
             return Err(PairError::Refused);
@@ -234,7 +256,7 @@ impl Store {
 
     /// Lets a device see and drive the screen over live video from now on.
     pub fn allow_screen(&self, id: &str) -> io::Result<()> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.locked()?;
         let mut devices = self.devices();
         for device in devices.iter_mut().filter(|d| d.id == id) {
             device.screen = true;
@@ -243,7 +265,7 @@ impl Store {
     }
 
     pub fn revoke(&self, id: &str) -> io::Result<bool> {
-        let _guard = self.lock.lock().unwrap();
+        let _guard = self.locked()?;
         let mut devices = self.devices();
         let before = devices.len();
         devices.retain(|d| d.id != id);
@@ -314,7 +336,10 @@ fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> Option<T> {
 /// Writes through a temporary file and a rename, so a reader in another process sees the
 /// old file or the new one, never half of one.
 fn write<T: Serialize>(path: &Path, value: &T) -> io::Result<()> {
-    let tmp = path.with_extension(format!("tmp{}", std::process::id()));
+    // Unique per write: two writers in one process must not share a temporary file either.
+    let mut tag = [0u8; 4];
+    random(&mut tag)?;
+    let tmp = path.with_extension(format!("tmp{}-{}", std::process::id(), hex(&tag)));
     let mut file = fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -371,6 +396,31 @@ mod tests {
         random(&mut raw).unwrap();
         let dir = std::env::temp_dir().join(format!("negi-store-{}", hex(&raw)));
         (Store::open(&dir).unwrap(), dir)
+    }
+
+    #[test]
+    fn changes_from_separate_processes_are_not_lost() {
+        let (store, dir) = scratch();
+        let ids: Vec<String> = (0..30)
+            .map(|i| {
+                let code = store.start_pairing().unwrap();
+                store.redeem(&code, &format!("phone {i}")).unwrap();
+                store.devices().last().unwrap().id.clone()
+            })
+            .collect();
+        // Each thread has a store of its own on the same directory, as `negi revoke` and the
+        // server do: a lock inside one process does not cover the others.
+        let threads: Vec<_> = ids
+            .into_iter()
+            .map(|id| {
+                let dir = dir.clone();
+                std::thread::spawn(move || Store::open(&dir).unwrap().revoke(&id).unwrap())
+            })
+            .collect();
+        for t in threads {
+            t.join().unwrap();
+        }
+        assert_eq!(store.devices().len(), 0, "a revoked device came back");
     }
 
     #[test]

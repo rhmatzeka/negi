@@ -168,7 +168,37 @@ pub(super) async fn bridge(app: Arc<App>, mut ws: WebSocket, device: Device, tok
 /// Wrong passwords a device may try before it waits.
 const TRIES: u32 = 5;
 const WAIT: Duration = Duration::from_secs(300);
-static FAILED: LazyLock<Mutex<HashMap<String, (u32, Instant)>>> = LazyLock::new(Default::default);
+
+/// Password tries per device. A try is taken before the password is checked, so requests
+/// sent together cannot all pass the count while the slow check runs.
+#[derive(Default)]
+struct Tries(Mutex<HashMap<String, (u32, Instant)>>);
+
+impl Tries {
+    /// Takes one try, or says the device must wait.
+    fn take(&self, device: &str) -> bool {
+        let mut tries = self.0.lock().unwrap_or_else(|e| e.into_inner());
+        let entry = tries.entry(device.to_owned()).or_insert((0, Instant::now()));
+        if entry.1.elapsed() >= WAIT {
+            *entry = (0, Instant::now());
+        }
+        if entry.0 >= TRIES {
+            return false;
+        }
+        entry.0 += 1;
+        entry.1 = Instant::now();
+        true
+    }
+
+    /// The right password: the device starts afresh.
+    fn clear(&self, device: &str) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).remove(device);
+    }
+}
+
+static TRIED: LazyLock<Tries> = LazyLock::new(Tries::default);
+/// One password check at a time, each one as slow as macOS makes a wrong one.
+static CHECKING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
 
 #[derive(Deserialize)]
 pub(super) struct Proof {
@@ -188,32 +218,45 @@ pub(super) async fn verify(State(app): State<Arc<App>>, headers: HeaderMap, Json
     if proof.password.len() > 256 {
         return super::refuse(StatusCode::BAD_REQUEST, "too long");
     }
-    {
-        let failed = FAILED.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((count, at)) = failed.get(&device.id)
-            && *count >= TRIES
-            && at.elapsed() < WAIT
-        {
-            return super::refuse(StatusCode::TOO_MANY_REQUESTS, "too many wrong passwords; try again in a few minutes");
-        }
+    if !TRIED.take(&device.id) {
+        return super::refuse(StatusCode::TOO_MANY_REQUESTS, "too many wrong passwords; try again in a few minutes");
     }
-    let right = tokio::task::spawn_blocking(move || login::check(&proof.password)).await.unwrap_or(false);
-    let mut failed = FAILED.lock().unwrap_or_else(|e| e.into_inner());
+    let right = {
+        let _one = CHECKING.lock().await;
+        tokio::task::spawn_blocking(move || login::check(&proof.password)).await.unwrap_or(false)
+    };
     if !right {
-        let entry = failed.entry(device.id.clone()).or_insert((0, Instant::now()));
-        if entry.1.elapsed() >= WAIT {
-            *entry = (0, Instant::now());
-        }
-        entry.0 += 1;
-        entry.1 = Instant::now();
         app.store.audit(&device.id, "screen password refused");
         return super::refuse(StatusCode::FORBIDDEN, "wrong password");
     }
-    failed.remove(&device.id);
-    drop(failed);
+    TRIED.clear(&device.id);
     if let Err(e) = app.store.allow_screen(&device.id) {
         return super::refuse(StatusCode::INTERNAL_SERVER_ERROR, &e.to_string());
     }
     app.store.audit(&device.id, "screen allowed by the Mac's password");
     Json(json!({ "ok": true })).into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tries_sent_together_stop_at_the_limit() {
+        let tries = Arc::new(Tries::default());
+        let taken: usize = (0..12)
+            .map(|_| {
+                let tries = tries.clone();
+                std::thread::spawn(move || tries.take("phone"))
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
+            .map(|t| usize::from(t.join().unwrap()))
+            .sum();
+        assert_eq!(taken, TRIES as usize);
+        assert!(!tries.take("phone"), "the sixth waits");
+        assert!(tries.take("other"), "another device has its own tries");
+        tries.clear("phone");
+        assert!(tries.take("phone"), "the right password starts it afresh");
+    }
 }
