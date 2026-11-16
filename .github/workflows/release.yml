@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
     permissions:
       contents: write # the GitHub release and its files
       id-token: write # attestation, and trusted publishing to crates.io and npm
