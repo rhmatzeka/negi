@@ -150,7 +150,7 @@ export function receive(msg: Incoming) {
       // The server was replaced by one carrying another interface: this page is the old one.
       if (outdated(msg.build)) return;
       failures = 0;
-      useApp.setState({ phase: "ready", problem: "", device: msg.device, version: msg.version, os: msg.os ?? "" });
+      useApp.setState((s) => ({ phase: "ready", greeted: s.greeted + 1, problem: "", device: msg.device, version: msg.version, os: msg.os ?? "" }));
       sync();
       break;
     case "bye":

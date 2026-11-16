@@ -33,6 +33,9 @@ interface AppState {
 
   /** connecting: no answer yet. ready: talking. lost: the socket dropped and is retried. */
   phase: "connecting" | "ready" | "lost";
+  /** Counts the server's greetings: it changes with every new socket, even one opened while
+   * the tab was hidden, when `phase` never left "ready". */
+  greeted: number;
   /** Why the Mac cannot be reached, once enough retries have failed. */
   problem: string;
   /** Shown on the pairing screen, such as "This device is no longer paired." */
@@ -101,6 +104,7 @@ export const useApp = create<AppState>()(
       accent: "miku",
       character: "miku",
       phase: "connecting",
+      greeted: 0,
       problem: "",
       notice: "",
       device: "",

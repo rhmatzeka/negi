@@ -89,9 +89,9 @@ export function Terminal({ pane }: { pane: string }) {
     observer.observe(el);
     ask();
     // A socket that dropped (Chrome throttles a tab out of sight) took its fit with it; the
-    // server gave the window back, so the new socket asks again even at the same size.
+    // server gave the window back, so every new socket asks again even at the same size.
     const off = useApp.subscribe((now, before) => {
-      if (now.phase === "ready" && before.phase !== "ready") {
+      if (now.greeted !== before.greeted) {
         asked = "";
         ask();
       }
