@@ -373,8 +373,9 @@
   width: 1ch;
   height: 1.25em;
   border-radius: 2px;
-  background: var(--t-fg);
-  opacity: 0.6;
+  /* A terminal's block cursor: the character under it is inverted, not dimmed. */
+  background: #e8eaed;
+  mix-blend-mode: difference;
   pointer-events: none;
 }
 
