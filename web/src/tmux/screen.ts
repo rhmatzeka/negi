@@ -156,7 +156,8 @@ export class Screen {
 
   private cursor([x, y, visible, shape]: Cursor) {
     this.cursorEl.hidden = !visible;
-    this.cursorEl.dataset.shape = shape === "block" || shape === "underline" ? shape : "bar";
+    // Asked for nothing, or tmux before 3.5: a full-screen program (an editor) gets a block, a shell a bar.
+    this.cursorEl.dataset.shape = shape === "block" || shape === "underline" || shape === "bar" ? shape : this.alt ? "block" : "bar";
     this.cursorEl.style.setProperty("--cx", String(x));
     this.cursorEl.style.setProperty("--cy", String(y));
   }

@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { hush, onScreen, request, screenOf } from "@/connection/link";
 import { calm } from "@/lib/anim";
 import { useApp } from "@/lib/store";
+import { findPane } from "@/tmux/tree";
 import { cn } from "@/lib/utils";
 import { columnWidth, paintRow } from "@/tmux/screen";
 import { useEarlier } from "./earlier";
@@ -34,7 +35,8 @@ export function Terminal({ pane }: { pane: string }) {
   const [settling, setSettling] = useState(false);
   const zoom = useApp((s) => s.zoom);
   const { lines: history, quiet, answered, reload } = useEarlier(pane);
-  const fitted = useApp((s) => s.view === "fit");
+  // A session no computer shows has no size of its own worth keeping, so it fills this screen.
+  const fitted = useApp((s) => s.view === "fit" || findPane(s.sessions, pane)?.session.attached === false);
 
   /** Sizes the text so the pane's columns fill the width, then applies the chosen zoom.
    * The fitted size never goes under 9px; a pane wider than that scrolls sideways. */

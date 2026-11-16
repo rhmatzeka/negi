@@ -61,7 +61,9 @@ export function PaneSheet({ id }: { id: string }) {
         ))}
       </div>
       {/* Two lines kept whatever it says, so choosing a view moves nothing below. */}
-      <p className="min-h-[2.6em] px-2 text-xs leading-[1.3] text-muted-foreground">{VIEWS.find((v) => v.value === view)?.says(host)}</p>
+      <p className="min-h-[2.6em] px-2 text-xs leading-[1.3] text-muted-foreground">{view === "screen" && !where.session.attached
+          ? `No terminal on ${host} shows this session, so it fills this screen.`
+          : VIEWS.find((v) => v.value === view)?.says(host)}</p>
       <p className="px-2 pt-1 text-xs font-bold text-muted-foreground">Text size</p>
       <div role="group" aria-label="Text size" className="grid grid-cols-3 gap-0.5 rounded-full bg-soft p-1">
         <Tip label="Smaller text" hint="10% less, down to 50%">
