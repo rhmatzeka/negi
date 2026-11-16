@@ -5,7 +5,6 @@ edition = "2024"
 description = "tmux on your phone, over one control-mode connection per session."
 license = "MIT"
 repository = "https://github.com/rifuki/negi"
-homepage = "https://github.com/rifuki/negi"
 readme = "README.md"
 keywords = ["tmux", "terminal", "remote", "phone", "tailscale"]
 categories = ["command-line-utilities"]

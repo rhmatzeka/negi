@@ -38,7 +38,7 @@ struct Slot;
 impl Slot {
     fn take() -> Option<Self> {
         RUNNING
-            .fetch_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < AT_ONCE).then_some(n + 1))
+            .try_update(Ordering::AcqRel, Ordering::Acquire, |n| (n < AT_ONCE).then_some(n + 1))
             .ok()
             .map(|_| Slot)
     }
