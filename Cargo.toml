@@ -1,6 +1,6 @@
 [package]
 name = "negi"
-version = "0.2.18"
+version = "0.2.19"
 edition = "2024"
 description = "tmux on your phone, over one control-mode connection per session."
 license = "MIT"

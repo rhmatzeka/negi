@@ -20,6 +20,11 @@ use crate::tmux::screen::{self, Delta};
 const TICK: Duration = Duration::from_millis(40);
 /// Shortest time between two captures of a pane someone has open.
 const OPEN_GAP: Duration = Duration::from_millis(50);
+/// A program redraws its screen in several writes; an open pane is read once its output has
+/// been quiet this long, so a half-drawn frame is not what the phone gets.
+const OPEN_QUIET: Duration = Duration::from_millis(16);
+/// A pane whose output never pauses is read anyway after this long.
+const OPEN_WAIT: Duration = Duration::from_millis(150);
 /// The same for a pane shown only as a preview.
 const PREVIEW_GAP: Duration = Duration::from_secs(1);
 /// An open pane is read again this often even without a notification, in case one was missed.
@@ -141,6 +146,9 @@ struct Watched {
     last: Option<Screen>,
     dirty: bool,
     captured: Instant,
+    /// When output last arrived, and when the pane first changed since it was last read.
+    heard: Instant,
+    since: Instant,
 }
 
 struct Actor {
@@ -250,6 +258,8 @@ impl Actor {
                     dirty: true,
                     // Due at once, whichever gap applies.
                     captured: now.checked_sub(PREVIEW_GAP).unwrap_or(now),
+                    heard: now.checked_sub(OPEN_WAIT).unwrap_or(now),
+                    since: now.checked_sub(OPEN_WAIT).unwrap_or(now),
                 });
                 // A late joiner starts from the screen the others already have, so the
                 // row updates that follow apply to all of them alike.
@@ -299,6 +309,11 @@ impl Actor {
                     self.broadcast(text(&json!({ "t": "busy", "pane": pane, "on": true })));
                 }
                 if let Some(watched) = self.panes.get_mut(&pane) {
+                    let now = Instant::now();
+                    if !watched.dirty {
+                        watched.since = now;
+                    }
+                    watched.heard = now;
                     watched.dirty = true;
                 }
             }
@@ -382,7 +397,8 @@ impl Actor {
             .filter(|(pane, w)| {
                 let age = w.captured.elapsed();
                 if open.contains(pane) {
-                    (w.dirty && age >= OPEN_GAP) || age >= OPEN_BACKSTOP
+                    let settled = w.heard.elapsed() >= OPEN_QUIET || w.since.elapsed() >= OPEN_WAIT;
+                    (w.dirty && age >= OPEN_GAP && settled) || age >= OPEN_BACKSTOP
                 } else {
                     w.dirty && age >= PREVIEW_GAP
                 }
