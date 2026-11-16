@@ -39,8 +39,8 @@ pub struct Config {
     /// Names this server answers to besides loopback: the machine's tailnet name and
     /// addresses. Anything else is refused, which is what stops DNS rebinding.
     pub hosts: Vec<String>,
-    /// The tailnet login allowed in. Without one, only loopback requests are served.
-    pub trusted_user: Option<String>,
+    /// The tailnet logins allowed in. With none, only loopback requests are served.
+    pub trusted_users: Vec<String>,
 }
 
 pub struct App {

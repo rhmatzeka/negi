@@ -7,7 +7,7 @@ use super::Config;
 /// Who may talk to this server:
 ///
 /// - Only requests addressed to loopback or to a configured name.
-/// - A request that came through a proxy must carry the trusted tailnet login. The proxy
+/// - A request that came through a proxy must carry one of the trusted tailnet logins. The proxy
 ///   sets that header itself and strips whatever a client sent.
 /// - A write, or a WebSocket, from a browser must come from this server's own pages.
 pub fn admit(headers: &HeaderMap, config: &Config, writes: bool) -> Result<(), &'static str> {
@@ -25,9 +25,8 @@ pub fn admit(headers: &HeaderMap, config: &Config, writes: bool) -> Result<(), &
         });
     if proxied {
         let login = value("tailscale-user-login").ok_or("not a tailnet user")?;
-        match &config.trusted_user {
-            Some(trusted) if trusted.eq_ignore_ascii_case(login) => {}
-            _ => return Err("not the trusted user"),
+        if !config.trusted_users.iter().any(|u| u.eq_ignore_ascii_case(login)) {
+            return Err("not the trusted user");
         }
     }
     if writes {
@@ -72,7 +71,7 @@ mod tests {
     fn config() -> Config {
         Config {
             hosts: vec!["mac.example.ts.net".into(), "100.64.0.7".into()],
-            trusted_user: Some("me@example.com".into()),
+            trusted_users: vec!["me@example.com".into(), "alt@example.org".into()],
         }
     }
 
@@ -122,8 +121,10 @@ mod tests {
             admit(&headers(&other), &config(), false),
             Err("not the trusted user")
         );
+        let second = [TAILNET, ("tailscale-user-login", "ALT@example.org")];
+        assert_eq!(admit(&headers(&second), &config(), false), Ok(()));
         let open = Config {
-            trusted_user: None,
+            trusted_users: vec![],
             ..config()
         };
         assert_eq!(

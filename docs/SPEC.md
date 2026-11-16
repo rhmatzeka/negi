@@ -272,8 +272,8 @@ anything. There is no command allowlist, which would defeat the purpose.
 - Host allowlist: loopback names and the configured tailnet names. Anything else gets 403,
   which is what stops DNS rebinding.
 - A request that came through a proxy (any `Tailscale-*` or `X-Forwarded-*` header, or a
-  non-loopback Host) must carry `Tailscale-User-Login` equal to the trusted user. With no
-  trusted user configured, only direct loopback requests are served.
+  non-loopback Host) must carry `Tailscale-User-Login` equal to a trusted user
+  (`--trusted-user`, comma-separated for several). With none configured, only direct loopback requests are served.
 - Writes and WebSocket upgrades: `Origin` must equal the `Host` the request came in on. A
   proxied one without `Origin` is refused; only local tools may leave it out.
 - Pairing: `negi pair` shows an 8-character code (40 bits), valid 10 minutes, single

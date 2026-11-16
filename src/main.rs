@@ -58,9 +58,10 @@ enum Command {
         /// A name the server answers to besides localhost; by default this machine's tailnet name
         #[arg(long = "host", value_name = "NAME", env = "NEGI_HOSTS", value_delimiter = ',')]
         hosts: Vec<String>,
-        /// The tailnet login allowed in through the proxy; by default this machine's owner
-        #[arg(long, value_name = "LOGIN", env = "NEGI_TRUSTED_USER")]
-        trusted_user: Option<String>,
+        /// A tailnet login allowed in through the proxy, or several separated by commas; by
+        /// default this machine's owner
+        #[arg(long = "trusted-user", value_name = "LOGIN", env = "NEGI_TRUSTED_USER", value_delimiter = ',')]
+        trusted_users: Vec<String>,
     },
     /// Put negi on your tailnet with `tailscale serve`, and show its address
     #[command(display_order = 2)]
@@ -149,13 +150,14 @@ async fn run(cli: Cli) -> Result<ExitCode, String> {
         return Ok(ExitCode::SUCCESS);
     };
     match command {
-        Command::Serve { port, hosts, trusted_user } => {
+        Command::Serve { port, hosts, trusted_users } => {
             let mut hosts: Vec<String> = hosts.into_iter().map(|h| h.trim().to_owned()).filter(|h| !h.is_empty()).collect();
             // With no name given, negi shares itself on the tailnet and follows it through a
             // rename or an account switch. A trusted user given by hand (a tagged machine has
             // no owner to trust) carries over, since a restart runs this same command again.
             let auto = hosts.is_empty();
-            let mut trusted_user = trusted_user;
+            let mut trusted_users: Vec<String> =
+                trusted_users.into_iter().map(|u| u.trim().to_owned()).filter(|u| !u.is_empty()).collect();
             // Unless told otherwise, answer to this machine's tailnet name and let its owner in,
             // read fresh at every start, so a renamed machine needs no new flags.
             let start = negi::tailnet::me().await.ok();
@@ -163,7 +165,9 @@ async fn run(cli: Cli) -> Result<ExitCode, String> {
                 if hosts.is_empty() {
                     hosts.push(me.name.clone());
                 }
-                trusted_user.get_or_insert(me.login.clone());
+                if trusted_users.is_empty() {
+                    trusted_users.push(me.login.clone());
+                }
                 let mut s = negi::tailnet::serving(me, port).await.unwrap_or_default();
                 if auto && !s.here && !s.blocked().await {
                     if let Err(e) = negi::tailnet::share(me, port).await {
@@ -177,7 +181,7 @@ async fn run(cli: Cli) -> Result<ExitCode, String> {
                 }
             }
             let watch = auto.then_some(start);
-            serve(socket, port, Config { hosts, trusted_user }, watch).await?;
+            serve(socket, port, Config { hosts, trusted_users }, watch).await?;
         }
         Command::Tailnet { port, off } => return tailnet(port, off).await,
         Command::Pair { no_wait } => return pair(no_wait).await,

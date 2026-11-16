@@ -34,7 +34,7 @@ async fn start(s: &Scratch) -> Running {
     let state = std::env::temp_dir().join(format!("negi-server-{}-{}", std::process::id(), rand()));
     let config = Config {
         hosts: vec!["mac.example.ts.net".into()],
-        trusted_user: Some("me@example.com".into()),
+        trusted_users: vec!["me@example.com".into()],
     };
     let app = Arc::new(App {
         hub: Hub::start(
