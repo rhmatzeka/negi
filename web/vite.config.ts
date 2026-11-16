@@ -33,14 +33,21 @@ export default defineConfig({
         // Not the page: the server writes its build into it. It comes from the network, and
         // from the cache only when the Mac cannot be reached.
         globPatterns: ["**/*.{js,css,woff2,avif,png,webp,svg}"],
-        // Scripts other than Latin load from the server when a pane prints them.
-        globIgnores: ["**/sn-pro-{cyrillic,cyrillic-ext,latin-ext,vietnamese}-*"],
+        // Scripts other than Latin, and the larger icon set, load from the server when a pane
+        // prints them.
+        globIgnores: ["**/sn-pro-{cyrillic,cyrillic-ext,latin-ext,vietnamese}-*", "**/symbols-*"],
         navigateFallback: null,
         runtimeCaching: [
           {
             urlPattern: ({ request, url }) => request.mode === "navigate" && !url.pathname.startsWith("/api/"),
             handler: "NetworkFirst",
             options: { cacheName: "page", expiration: { maxEntries: 4 } },
+          },
+          {
+            // Those fonts, kept once fetched. Their names carry a hash, so a kept one is never stale.
+            urlPattern: ({ url }) => url.pathname.endsWith(".woff2"),
+            handler: "CacheFirst",
+            options: { cacheName: "fonts", expiration: { maxEntries: 32 } },
           },
         ],
         cleanupOutdatedCaches: true,

@@ -11,5 +11,10 @@ https://scripts.sil.org/OFL. The added symbol glyphs come from the Nerd Fonts pr
 The subset keeps Latin, punctuation, arrows, box drawing, block and braille characters,
 and the common prompt and file-type symbols.
 
+`symbols.woff2` holds the rest of the Nerd Font icons (private-use code points the mono
+subset lacks, Material Design and Codicons among them), cut from JetBrainsMono Nerd Font
+Regular 3.4.0 with `fontTools.subset`. The page loads it through `unicode-range`, so only
+a screen that shows one of those icons fetches it.
+
 The interface face, Figtree, comes from the `@fontsource-variable/figtree` package (SIL
 Open Font License 1.1) and is bundled by the build.

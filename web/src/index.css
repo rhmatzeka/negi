@@ -20,11 +20,20 @@
   font-weight: 700;
   font-display: swap;
 }
+/* The Nerd Font icons the mono subset leaves out (Material Design, Codicons, ...), which
+   file trees and prompts use. Fetched only once a screen shows one of them. */
+@font-face {
+  font-family: "Pane Symbols";
+  src: url("./assets/fonts/symbols.woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+  unicode-range: U+E000-F8FF, U+F0000-FFFFD;
+}
 
 @theme inline {
   --font-sans: "SN Pro Variable", ui-rounded, system-ui, sans-serif;
   --font-heading: var(--font-sans);
-  --font-mono: "Pane Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --font-mono: "Pane Mono", "Pane Symbols", ui-monospace, "SF Mono", Menlo, monospace;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
