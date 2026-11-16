@@ -372,6 +372,16 @@
   height: calc(24px + var(--used, 1) * 1.25em);
   overflow: hidden;
 }
+/* As is, a pane narrower than the box sits in its middle rather than against the left. The
+   wrapper is centred, so the history above keeps the screen's width and left edge. */
+[data-asis] .term-content {
+  width: max-content;
+  margin-inline: auto;
+}
+/* The pane's own width, not its longest line's, is what gets centred. */
+[data-asis] .term-screen {
+  min-width: calc(var(--cols, 0) * 1ch + 24px);
+}
 /* Fitted, the window is exactly the box, so every row shows and the padding is even. */
 [data-fitted] .term-screen {
   height: calc(24px + var(--rows, 1) * 1.25em);

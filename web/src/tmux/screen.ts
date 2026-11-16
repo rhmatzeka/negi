@@ -153,6 +153,7 @@ export class Screen {
 
   set(msg: ScreenMessage) {
     this.cols = msg.cols;
+    this.el.style.setProperty("--cols", String(msg.cols));
     this.rows = msg.rows;
     this.alt = msg.alt;
     this.lines = msg.lines.slice();

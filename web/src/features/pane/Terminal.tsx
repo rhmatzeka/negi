@@ -49,8 +49,8 @@ export function Terminal({ pane }: { pane: string }) {
     if (!screen || !el) return;
     const width = (el.clientWidth - 24) / (screen.cols * columnWidth());
     // Sized for the phone, the window has as many columns as fit at this size, so the size is fixed.
-    // As is, a narrow pane would fill the width with larger text than a wide one; it stops at
-    // the fitted size instead, so every pane reads at one size and a narrow one leaves room.
+    // As is, every pane reads at that same size, smaller only when it would not fit the width
+    // (never under 9px: a wider one scrolls sideways); a narrower one sits in the middle.
     setSize(fitted ? (fitPx ?? FIT_PX * zoom) : Math.max(9, Math.min(FIT_PX, width)) * zoom);
   }, [pane, zoom, fitted, fitPx]);
 
@@ -348,13 +348,14 @@ export function Terminal({ pane }: { pane: string }) {
       onTouchCancel={() => (touching.current = false)}
       style={{ "--fs": `${size.toFixed(2)}px`, viewTransitionName: "stage" } as React.CSSProperties}
       data-fitted={fitted || undefined}
+      data-asis={!fitted || undefined}
       className={cn(
         "slim-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-none rounded-lg [overflow-anchor:none] bg-term text-term-fg outline-none dark:ring-1 dark:ring-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
         // A fitted window has no more columns than the box, so there is nothing to scroll sideways to.
         fitted ? "overflow-x-hidden" : "overflow-x-auto",
       )}
     >
-      <div ref={content} className={cn((settling || !answered) && "opacity-0")}>
+      <div ref={content} className={cn("term-content", (settling || !answered) && "opacity-0")}>
       {history && history.length > 0 && (
         <div aria-label="History" className="term-history relative" style={{ height: rows.getTotalSize() }}>
           {rows.getVirtualItems().map((item) => (
