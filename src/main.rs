@@ -151,7 +151,10 @@ async fn run(cli: Cli) -> Result<ExitCode, String> {
     match command {
         Command::Serve { port, hosts, trusted_user } => {
             let mut hosts: Vec<String> = hosts.into_iter().map(|h| h.trim().to_owned()).filter(|h| !h.is_empty()).collect();
-            let auto = hosts.is_empty() && trusted_user.is_none();
+            // With no name given, negi shares itself on the tailnet and follows it through a
+            // rename or an account switch. A trusted user given by hand (a tagged machine has
+            // no owner to trust) carries over, since a restart runs this same command again.
+            let auto = hosts.is_empty();
             let mut trusted_user = trusted_user;
             // Unless told otherwise, answer to this machine's tailnet name and let its owner in,
             // read fresh at every start, so a renamed machine needs no new flags.
