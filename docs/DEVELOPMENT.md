@@ -107,21 +107,21 @@ workflows' actions, which are pinned to commit SHAs.
 
 ## Releasing
 
-Bump `version` in `Cargo.toml` and `packaging/npm/package.json`, commit, then push an
-annotated tag whose message is the release notes:
+Bump `version` in `Cargo.toml` and `packaging/npm/package.json` and push to main. While the
+repository variable `AUTO_RELEASE` is `true`, the `Release` workflow sees a version with no
+tag yet and releases it, with the commits since the last tag as the notes. A push that does
+not change the version releases nothing. With `AUTO_RELEASE` off, push an annotated tag
+instead (`git tag -a v0.2.3 -F notes.md && git push origin v0.2.3`), whose message becomes
+the notes.
 
-```sh
-git tag -a v0.2.3 -F notes.md && git push origin v0.2.3
-```
+The workflow builds on GitHub's Apple silicon runner with `scripts/release.sh`, attests the
+tarball's provenance (`gh attestation verify <tarball> -R rifuki/negi`), publishes the
+GitHub release, then each registry that is switched on:
 
-The `Release` workflow builds on GitHub's Apple silicon runner with `scripts/release.sh`,
-attests the tarball's provenance (`gh attestation verify <tarball> -R rifuki/negi`), and
-publishes the GitHub release. Each registry is published to once it is set up:
-
-| Registry | Set up once |
-| --- | --- |
-| crates.io | Add a trusted publisher on crates.io for `negi`: repository `rifuki/negi`, workflow `release.yml`. Then the repository variable `PUBLISH_CRATES` = `true`. |
-| npm | Add a trusted publisher on npmjs.com for `@rifuki/negi`: GitHub Actions, `rifuki/negi`, `release.yml`. Then `PUBLISH_NPM` = `true`. |
-| Homebrew | A fine-grained token with contents write on `rifuki/homebrew-tap` only, saved as the secret `HOMEBREW_TAP_TOKEN`. |
+| Registry | Switch | Set up once |
+| --- | --- | --- |
+| crates.io | `PUBLISH_CRATES` = `true` | Trusted publisher on crates.io for `negi`: `rifuki/negi`, `release.yml`. |
+| npm | `PUBLISH_NPM` = `true` | `npm trust github @rifuki/negi --file release.yml --repo rifuki/negi --allow-publish` |
+| Homebrew | the secret `HOMEBREW_TAP_KEY` | A deploy key with write access on `rifuki/homebrew-tap`; its private half is the secret. |
 
 `sh scripts/release.sh` still builds the same files locally and publishes nothing.
