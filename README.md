@@ -41,7 +41,7 @@ the page over your tailnet; nothing goes through anyone else's server.
 brew install rifuki/tap/negi
 ```
 
-or `npm install -g @rifuki/negi`, or `cargo install negi`. macOS 12.3 or later on Apple silicon; on an Intel Mac, `cargo install negi` builds it.
+or `npm install -g @rifuki/negi`, or `cargo install negi`. Without Homebrew, `curl -fsSL https://raw.githubusercontent.com/rifuki/negi/main/scripts/install.sh | sh` copies the release binary to `~/.local/bin`. macOS 12.3 or later on Apple silicon; on an Intel Mac, `cargo install negi` builds it.
 
 ## Get started
 

@@ -15,8 +15,22 @@ pub struct Me {
     pub login: String,
 }
 
+/// A LaunchAgent's PATH misses `/usr/local/bin`, so the CLI is looked for where it installs.
+const TAILSCALE_CLI: &[&str] = &[
+    "/usr/local/bin/tailscale",
+    "/opt/homebrew/bin/tailscale",
+    "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+];
+
+fn tailscale_cli() -> std::ffi::OsString {
+    TAILSCALE_CLI
+        .iter()
+        .find(|p| std::path::Path::new(p).exists())
+        .map_or_else(|| "tailscale".into(), |p| (*p).into())
+}
+
 async fn tailscale(args: &[&str]) -> Result<String, String> {
-    let run = Command::new("tailscale").args(args).output();
+    let run = Command::new(tailscale_cli()).args(args).output();
     let output = tokio::time::timeout(Duration::from_secs(20), run)
         .await
         .map_err(|_| "tailscale did not answer".to_owned())?
@@ -54,6 +68,23 @@ pub struct Serving {
     pub stale: Vec<String>,
     /// Anything served that is not negi's.
     pub others: bool,
+    /// Where other rules on `https://<name>` (port 443) send traffic; sharing would replace them.
+    pub taken_by: Vec<String>,
+}
+
+impl Serving {
+    /// Port 443 goes somewhere still alive. A rule to a closed loopback port, left by a port
+    /// change, may be replaced.
+    pub async fn blocked(&self) -> bool {
+        for target in &self.taken_by {
+            let addr = target.strip_prefix("http://").unwrap_or(target);
+            let alive = tokio::time::timeout(Duration::from_secs(2), tokio::net::TcpStream::connect(addr)).await;
+            if !matches!(alive, Ok(Err(_))) || !addr.starts_with("127.0.0.1:") {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 pub async fn serving(me: &Me, port: u16) -> Result<Serving, String> {
@@ -65,19 +96,49 @@ fn parse_serving(config: &Value, name: &str, port: u16) -> Serving {
     let ours = format!("http://127.0.0.1:{port}");
     let mut found = Serving::default();
     for (host, site) in config["Web"].as_object().into_iter().flatten() {
-        let host_name = host.rsplit_once(':').map_or(host.as_str(), |(h, _)| h);
+        let (host_name, host_port) = host.rsplit_once(':').unwrap_or((host.as_str(), "443"));
         for handler in site["Handlers"].as_object().into_iter().flatten().map(|(_, h)| h) {
             let proxy = handler["Proxy"].as_str().unwrap_or("");
             match (proxy == ours, host_name == name) {
                 (true, true) => found.here = true,
                 (true, false) => found.stale.push(host_name.to_owned()),
-                (false, _) => found.others = true,
+                (false, here) => {
+                    found.others = true;
+                    if here && host_port == "443" {
+                        found.taken_by.push(proxy.to_owned());
+                    }
+                }
             }
         }
     }
     found.stale.sort();
     found.stale.dedup();
     found
+}
+
+/// Waits until this Mac is on another tailnet, or signed in or out, and puts negi on the new
+/// one. A change must be read twice in a row, so one slow `tailscale status` drops no phone.
+pub async fn follow(start: Option<Me>, port: u16) -> Option<Me> {
+    let mut seen = None;
+    loop {
+        tokio::time::sleep(Duration::from_secs(15)).await;
+        let now = me().await.ok();
+        if now == start {
+            seen = None;
+            continue;
+        }
+        if seen.as_ref() != Some(&now) {
+            seen = Some(now);
+            continue;
+        }
+        if let Some(me) = &now
+            && let Ok(s) = serving(me, port).await
+            && !s.blocked().await
+        {
+            let _ = share(me, port).await;
+        }
+        return now;
+    }
 }
 
 /// Serves `https://<name>` on the tailnet only, proxied to negi on this port. Rules that a
@@ -113,9 +174,31 @@ mod tests {
             "old.example.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8792" } } },
             "new.example.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8792" } } },
         } });
-        assert_eq!(parse_serving(&config, "new.example.ts.net", 8792), Serving { here: true, stale: vec!["old.example.ts.net".into()], others: false });
+        assert_eq!(parse_serving(&config, "new.example.ts.net", 8792), Serving { here: true, stale: vec!["old.example.ts.net".into()], others: false, taken_by: vec![] });
         let other = json!({ "Web": { "new.example.ts.net:443": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:3000" } } } } });
-        assert_eq!(parse_serving(&other, "new.example.ts.net", 8792), Serving { here: false, stale: vec![], others: true });
+        assert_eq!(parse_serving(&other, "new.example.ts.net", 8792), Serving { here: false, stale: vec![], others: true, taken_by: vec!["http://127.0.0.1:3000".into()] });
+        let side = json!({ "Web": { "new.example.ts.net:9444": { "Handlers": { "/": { "Proxy": "http://127.0.0.1:8790" } } } } });
+        assert_eq!(parse_serving(&side, "new.example.ts.net", 8792), Serving { here: false, stale: vec![], others: true, taken_by: vec![] });
         assert_eq!(parse_serving(&Value::Null, "new.example.ts.net", 8792), Serving::default());
+    }
+
+    #[test]
+    fn the_cli_is_looked_up_at_its_install_paths() {
+        let installed = TAILSCALE_CLI.iter().any(|p| std::path::Path::new(p).exists());
+        assert_eq!(tailscale_cli() != "tailscale", installed);
+    }
+
+    #[tokio::test]
+    async fn a_rule_to_a_closed_loopback_port_does_not_block() {
+        let open = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let live = format!("http://{}", open.local_addr().unwrap());
+        let closed = {
+            let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+            format!("http://{}", l.local_addr().unwrap())
+        };
+        let s = |t: &str| Serving { taken_by: vec![t.to_owned()], ..Default::default() };
+        assert!(!s(&closed).blocked().await);
+        assert!(s(&live).blocked().await);
+        assert!(s("http://10.0.0.5:80").blocked().await);
     }
 }

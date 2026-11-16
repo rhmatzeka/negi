@@ -40,7 +40,7 @@ how to build the real one.
 ./target/release/negi keys %3 C-c
 ./target/release/negi -L other ls              # another tmux server
 
-./target/release/negi serve                    # then open http://127.0.0.1:8791
+./target/release/negi serve                    # then open http://127.0.0.1:3939
 ./target/release/negi tailnet                  # serve it on your tailnet, print its https address
 ./target/release/negi pair                     # a one-time code; waits until it is used
 ./target/release/negi devices

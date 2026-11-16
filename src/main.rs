@@ -14,6 +14,9 @@ use negi::store::{Device, Pairing, Store};
 use negi::tmux::mux;
 use negi::tmux::{Socket, Tmux};
 
+mod term;
+use term::{Quiet, Spinner, copy, key};
+
 const STYLES: Styles = Styles::styled()
     .header(AnsiColor::Green.on_default().effects(Effects::BOLD))
     .usage(AnsiColor::Green.on_default().effects(Effects::BOLD))
@@ -50,7 +53,7 @@ enum Command {
     /// Run the server on 127.0.0.1
     #[command(display_order = 1)]
     Serve {
-        #[arg(long, env = "NEGI_PORT", default_value_t = 8791)]
+        #[arg(long, env = "NEGI_PORT", default_value_t = 3939)]
         port: u16,
         /// A name the server answers to besides localhost; by default this machine's tailnet name
         #[arg(long = "host", value_name = "NAME", env = "NEGI_HOSTS", value_delimiter = ',')]
@@ -63,7 +66,7 @@ enum Command {
     #[command(display_order = 2)]
     Tailnet {
         /// The port `negi serve` listens on
-        #[arg(long, env = "NEGI_PORT", default_value_t = 8791)]
+        #[arg(long, env = "NEGI_PORT", default_value_t = 3939)]
         port: u16,
         /// Stop serving it on the tailnet
         #[arg(long)]
@@ -148,20 +151,30 @@ async fn run(cli: Cli) -> Result<ExitCode, String> {
     match command {
         Command::Serve { port, hosts, trusted_user } => {
             let mut hosts: Vec<String> = hosts.into_iter().map(|h| h.trim().to_owned()).filter(|h| !h.is_empty()).collect();
+            let auto = hosts.is_empty() && trusted_user.is_none();
             let mut trusted_user = trusted_user;
             // Unless told otherwise, answer to this machine's tailnet name and let its owner in,
             // read fresh at every start, so a renamed machine needs no new flags.
-            if let Ok(me) = negi::tailnet::me().await {
+            let start = negi::tailnet::me().await.ok();
+            if let Some(me) = &start {
                 if hosts.is_empty() {
                     hosts.push(me.name.clone());
                 }
                 trusted_user.get_or_insert(me.login.clone());
-                match negi::tailnet::serving(&me, port).await {
-                    Ok(s) if s.here => eprintln!("negi: on your tailnet at https://{}", me.name),
-                    _ => eprintln!("negi: not on your tailnet yet; run `negi tailnet --port {port}`"),
+                let mut s = negi::tailnet::serving(me, port).await.unwrap_or_default();
+                if auto && !s.here && !s.blocked().await {
+                    if let Err(e) = negi::tailnet::share(me, port).await {
+                        eprintln!("negi: could not put itself on the tailnet: {e}");
+                    }
+                    s = negi::tailnet::serving(me, port).await.unwrap_or_default();
+                }
+                match s.here {
+                    true => eprintln!("negi: on your tailnet at https://{}", me.name),
+                    false => eprintln!("negi: not on your tailnet yet; run `negi tailnet --port {port}`"),
                 }
             }
-            serve(socket, port, Config { hosts, trusted_user }).await?;
+            let watch = auto.then_some(start);
+            serve(socket, port, Config { hosts, trusted_user }, watch).await?;
         }
         Command::Tailnet { port, off } => return tailnet(port, off).await,
         Command::Pair { no_wait } => return pair(no_wait).await,
@@ -204,7 +217,7 @@ async fn pair(no_wait: bool) -> Result<ExitCode, String> {
     }
     let fancy = std::io::stderr().is_terminal();
     let io = |e: std::io::Error| e.to_string();
-    let spinner = cliclack::spinner();
+    let spinner = Spinner::new();
     if fancy {
         cliclack::intro(style(" negi pair ").on_green().black().bold()).map_err(io)?;
         // Written plainly, so that copying it pastes as it reads.
@@ -213,7 +226,7 @@ async fn pair(no_wait: bool) -> Result<ExitCode, String> {
             format!(
                 "{}\n\n{}",
                 style(&shown).cyan().bold(),
-                style("It works once. Ctrl+C takes it back.").dim()
+                style("It works once. C copies it, Ctrl+C takes it back.").dim()
             ),
         )
         .map_err(io)?;
@@ -223,7 +236,8 @@ async fn pair(no_wait: bool) -> Result<ExitCode, String> {
         eprintln!("Waiting for a phone. Ctrl+C takes the code back.");
     }
     // The terminal would print ^C over the spinner; nothing typed here is wanted anyway.
-    let _quiet = fancy.then(Quiet::new).flatten();
+    let quiet = fancy.then(Quiet::new).flatten();
+    let mut copied = false;
 
     let mut tick = tokio::time::interval(Duration::from_millis(250));
     let interrupted = tokio::signal::ctrl_c();
@@ -241,6 +255,10 @@ async fn pair(no_wait: bool) -> Result<ExitCode, String> {
                 return Ok(ExitCode::from(130));
             }
             _ = tick.tick() => {}
+        }
+        if quiet.is_some() && matches!(key(), Some(b'c' | b'C')) && !copied && copy(&shown) {
+            copied = true;
+            spinner.say(format!("Copied {} to the clipboard", style(&shown).cyan().bold()));
         }
         let failed = match store.pairing(&code) {
             Pairing::Waiting { expires, tries } => {
@@ -277,32 +295,6 @@ async fn pair(no_wait: bool) -> Result<ExitCode, String> {
     }
 }
 
-/// Keeps the terminal from echoing keys while it lives; puts it back as it was after.
-struct Quiet(libc::termios);
-
-impl Quiet {
-    fn new() -> Option<Self> {
-        let mut was = unsafe { std::mem::zeroed::<libc::termios>() };
-        // SAFETY: plain termios calls on stdin with a struct of the right type.
-        unsafe {
-            if libc::tcgetattr(libc::STDIN_FILENO, &mut was) != 0 {
-                return None;
-            }
-            let mut quiet = was;
-            quiet.c_lflag &= !(libc::ECHO | libc::ECHOCTL);
-            libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &quiet);
-        }
-        Some(Self(was))
-    }
-}
-
-impl Drop for Quiet {
-    fn drop(&mut self) {
-        // SAFETY: restores the settings read in `new`.
-        unsafe { libc::tcsetattr(libc::STDIN_FILENO, libc::TCSANOW, &self.0) };
-    }
-}
-
 /// Puts negi on the tailnet, or takes it off, and says where it can be reached.
 async fn tailnet(port: u16, off: bool) -> Result<ExitCode, String> {
     let io = |e: std::io::Error| e.to_string();
@@ -312,7 +304,7 @@ async fn tailnet(port: u16, off: bool) -> Result<ExitCode, String> {
         cliclack::intro(style(" negi tailnet ").on_green().black().bold()).map_err(io)?;
         cliclack::log::info(format!("{}  {}", style(&me.name).bold(), style(&me.login).dim())).map_err(io)?;
     }
-    let spinner = cliclack::spinner();
+    let spinner = Spinner::new();
     if off {
         if fancy {
             spinner.start("Taking negi off the tailnet");
@@ -481,7 +473,7 @@ fn store() -> Result<Store, String> {
     Store::open(dir).map_err(|e| format!("state folder: {e}"))
 }
 
-async fn serve(socket: Socket, port: u16, config: Config) -> Result<(), String> {
+async fn serve(socket: Socket, port: u16, config: Config, watch: Option<Option<negi::tailnet::Me>>) -> Result<(), String> {
     let tmux = Tmux::find(socket)?;
     let app = Arc::new(App {
         hub: Hub::start(tmux.clone(), Timing::default()),
@@ -490,9 +482,26 @@ async fn serve(socket: Socket, port: u16, config: Config) -> Result<(), String> 
         config,
     });
     tokio::select! {
-        served = server::serve(app, port) => served.map_err(|e| e.to_string()),
+        served = server::serve(app, port) => served.map_err(|e| match e.kind() {
+            std::io::ErrorKind::AddrInUse => format!(
+                "port {port} is already taken, most likely by negi running as a service.\n  \
+                 Nothing to start: the phone already reaches it. `negi serve --port <other>` runs a second one."
+            ),
+            _ => e.to_string(),
+        }),
         _ = stop() => Ok(()),
+        now = async { match watch { Some(start) => negi::tailnet::follow(start, port).await, None => std::future::pending().await } } => {
+            eprintln!("negi: tailnet changed to {}; restarting on it", now.map_or("none".to_owned(), |m| m.name));
+            restart()
+        }
     }
+}
+
+/// Runs this same command again in place, so a run from a terminal follows the tailnet too.
+fn restart() -> Result<(), String> {
+    use std::os::unix::process::CommandExt;
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    Err(std::process::Command::new(exe).args(std::env::args_os().skip(1)).exec().to_string())
 }
 
 /// Resolves on Ctrl+C or when launchd asks the service to stop.

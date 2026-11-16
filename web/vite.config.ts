@@ -52,7 +52,7 @@ export default defineConfig({
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "./src") } },
   server: {
     // `pnpm dev` talks to a negi already running on its default port.
-    proxy: { "/api": { target: "http://127.0.0.1:8791", ws: true } },
+    proxy: { "/api": { target: "http://127.0.0.1:3939", ws: true } },
   },
   build: { outDir: "dist", emptyOutDir: true, sourcemap: false },
 });

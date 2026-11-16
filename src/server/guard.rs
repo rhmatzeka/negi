@@ -135,7 +135,7 @@ mod tests {
     #[test]
     fn a_proxied_request_cannot_pose_as_local() {
         let posing = [
-            ("host", "localhost:8791"),
+            ("host", "localhost:3939"),
             ("x-forwarded-for", "100.64.0.9"),
         ];
         assert_eq!(
@@ -143,7 +143,7 @@ mod tests {
             Err("not a tailnet user")
         );
         let guest = [
-            ("host", "127.0.0.1:8791"),
+            ("host", "127.0.0.1:3939"),
             ("tailscale-user-login", "guest@example.com"),
         ];
         assert_eq!(
@@ -155,9 +155,9 @@ mod tests {
     #[test]
     fn local_tools_need_no_login_and_no_origin() {
         for host in [
-            "127.0.0.1:8791",
-            "localhost:8791",
-            "[::1]:8791",
+            "127.0.0.1:3939",
+            "localhost:3939",
+            "[::1]:3939",
             "localhost",
         ] {
             assert_eq!(
@@ -168,7 +168,7 @@ mod tests {
         }
         let open = Config::default();
         assert_eq!(
-            admit(&headers(&[("host", "127.0.0.1:8791")]), &open, true),
+            admit(&headers(&[("host", "127.0.0.1:3939")]), &open, true),
             Ok(())
         );
     }
@@ -190,7 +190,7 @@ mod tests {
             Err("no origin")
         );
         let local_cross = [
-            ("host", "127.0.0.1:8791"),
+            ("host", "127.0.0.1:3939"),
             ("origin", "https://evil.example"),
         ];
         assert_eq!(
@@ -198,8 +198,8 @@ mod tests {
             Err("cross-origin")
         );
         let local_same = [
-            ("host", "127.0.0.1:8791"),
-            ("origin", "http://127.0.0.1:8791"),
+            ("host", "127.0.0.1:3939"),
+            ("origin", "http://127.0.0.1:3939"),
         ];
         assert_eq!(admit(&headers(&local_same), &config(), true), Ok(()));
     }
@@ -208,7 +208,7 @@ mod tests {
     fn host_names_lose_their_port() {
         assert_eq!(host_name("a.b:1"), "a.b");
         assert_eq!(host_name("a.b"), "a.b");
-        assert_eq!(host_name("[::1]:8791"), "[::1]");
+        assert_eq!(host_name("[::1]:3939"), "[::1]");
         assert_eq!(host_name("[::1]"), "[::1]");
     }
 }
