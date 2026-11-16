@@ -127,3 +127,47 @@ jobs:
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -m "negi $VERSION"
           git push
           rm -f ~/.ssh/tap
+
+  linux:
+    needs: [plan, release]
+    if: needs.plan.outputs.release == 'true'
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write # the Linux files on the release
+      id-token: write # attestation
+      attestations: write # the build provenance of the tarball
+    env:
+      VERSION: ${{ needs.plan.outputs.version }}
+      TAG: v${{ needs.plan.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 12.16.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # stable
+        with:
+          toolchain: stable
+      - name: Build
+        run: |
+          pnpm --dir web install --frozen-lockfile
+          pnpm --dir web build
+          cargo build --release --locked
+          name="negi-$VERSION-linux-x86_64"
+          mkdir -p "dist/$name"
+          cp target/release/negi LICENSE README.md "dist/$name/"
+          tar -czf "dist/$name.tar.gz" -C "dist/$name" negi LICENSE README.md
+          (cd dist && sha256sum "$name.tar.gz" > "$name.tar.gz.sha256")
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/negi-*-linux-x86_64.tar.gz
+      - name: Upload to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" dist/negi-*-linux-x86_64.tar.gz dist/negi-*-linux-x86_64.tar.gz.sha256 --clobber
+

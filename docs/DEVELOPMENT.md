@@ -114,8 +114,8 @@ not change the version releases nothing. With `AUTO_RELEASE` off, push an annota
 instead (`git tag -a v0.2.3 -F notes.md && git push origin v0.2.3`), whose message becomes
 the notes.
 
-The workflow builds on GitHub's Apple silicon runner with `scripts/release.sh`, attests the
-tarball's provenance (`gh attestation verify <tarball> -R rifuki/negi`), publishes the
+The workflow builds on GitHub's Apple silicon runner with `scripts/release.sh`, and a Linux
+x86_64 tarball on Ubuntu, attests each tarball's provenance (`gh attestation verify <tarball> -R rifuki/negi`), publishes the
 GitHub release, then each registry that is switched on:
 
 | Registry | Switch | Set up once |

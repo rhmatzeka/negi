@@ -4,22 +4,27 @@ set -eu
 
 prefix=${NEGI_PREFIX:-$HOME/.local}
 
-if [ "$(uname -s)" != Darwin ] || [ "$(uname -m)" != arm64 ]; then
-  echo "negi's release is for Apple silicon macOS; on another machine run: cargo install negi" >&2
-  exit 1
-fi
+case "$(uname -s)/$(uname -m)" in
+  Darwin/arm64) platform=darwin-arm64 ;;
+  Linux/x86_64) platform=linux-x86_64 ;;
+  *)
+    echo "no negi release for $(uname -s) $(uname -m); build it with: cargo install negi" >&2
+    exit 1
+    ;;
+esac
 
 # The newest release unless NEGI_VERSION names one: /releases/latest redirects to its tag.
 version=${NEGI_VERSION:-$(curl -fsSLI -o /dev/null -w '%{url_effective}' https://github.com/rifuki/negi/releases/latest | sed 's|.*/tag/v||')}
 base=https://github.com/rifuki/negi/releases/download/v$version
-name=negi-$version-darwin-arm64
+name=negi-$version-$platform
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 curl -fsSL "$base/$name.tar.gz" -o "$tmp/$name.tar.gz"
 curl -fsSL "$base/$name.tar.gz.sha256" -o "$tmp/$name.tar.gz.sha256"
 
-(cd "$tmp" && shasum -a 256 -c "$name.tar.gz.sha256" >/dev/null) || {
+check() { if command -v sha256sum >/dev/null; then sha256sum -c "$@"; else shasum -a 256 -c "$@"; fi; }
+(cd "$tmp" && check "$name.tar.gz.sha256" >/dev/null) || {
   echo "checksum does not match the release; nothing installed" >&2
   exit 1
 }

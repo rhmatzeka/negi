@@ -133,7 +133,7 @@ pub async fn tree(link: &Link) -> Result<Vec<Session>, Error> {
     ];
     let mut out = Vec::with_capacity(4);
     for reply in link.batch(lines).await? {
-        out.push(text(&reply?));
+        out.push(listing(&reply?));
     }
     Ok(parse_tree(&out[0], &out[1], &out[2], &out[3]))
 }
@@ -324,8 +324,15 @@ pub async fn text_in(link: &Link, pane: &str, input: &str, enter: bool) -> Resul
                 "display-message -p -t {pane} '#{{bracket_paste_flag}}'"
             ))
             .await?;
-        if text(&flag).trim() == "1" {
-            bytes = [b"\x1b[200~", bytes.as_slice(), b"\x1b[201~"].concat();
+        match text(&flag).trim() {
+            "1" => bytes = [b"\x1b[200~", bytes.as_slice(), b"\x1b[201~"].concat(),
+            "0" => {}
+            // tmux 3.5a and older have no such format: their own paste-buffer -p brackets the
+            // text when, and only when, the program asked for bracketed paste.
+            _ => {
+                paste(link, pane, &bytes).await?;
+                bytes.clear();
+            }
         }
     }
     let sent = !bytes.is_empty();
@@ -346,6 +353,38 @@ pub async fn text_in(link: &Link, pane: &str, input: &str, enter: bool) -> Resul
             tokio::time::sleep(SUBMIT_SETTLE).await;
         }
         link.run(format!("send-keys -t {pane} Enter")).await?;
+    }
+    Ok(())
+}
+
+/// Pastes `bytes` with tmux's own `paste-buffer -p`, through a file only this user can read,
+/// removed at once.
+async fn paste(link: &Link, pane: &str, bytes: &[u8]) -> Result<(), Error> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    let mut tag = [0u8; 8];
+    getrandom::fill(&mut tag).map_err(|e| Error::Tmux(e.to_string()))?;
+    let name = format!("negi-{}", tag.iter().map(|b| format!("{b:02x}")).collect::<String>());
+    let path = std::env::temp_dir().join(&name);
+    let written = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(&path)
+        .and_then(|mut file| file.write_all(bytes));
+    if let Err(e) = written {
+        let _ = std::fs::remove_file(&path);
+        return Err(Error::Tmux(e.to_string()));
+    }
+    let replies = link
+        .batch(vec![
+            format!("load-buffer -b {name} '{}'", path.display()),
+            format!("paste-buffer -p -d -b {name} -t {pane}"),
+        ])
+        .await;
+    let _ = std::fs::remove_file(&path);
+    for reply in replies? {
+        reply?;
     }
     Ok(())
 }
@@ -598,6 +637,12 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// A `-F` listing with its fields apart again. tmux 3.5a and older (3.4 on Ubuntu 24.04)
+/// write the separator as the four characters `\037`; 3.8 writes the byte.
+fn listing(bytes: &[u8]) -> String {
+    text(bytes).replace("\\037", &SEP.to_string())
+}
+
 fn rows(body: &[u8]) -> Vec<String> {
     let mut lines: Vec<String> = body.split(|b| *b == b'\n').map(text).collect();
     // The block ends with a newline, which is not an extra row.
@@ -613,6 +658,19 @@ mod tests {
 
     fn join(fields: &[&str]) -> String {
         fields.join(&SEP.to_string())
+    }
+
+    #[test]
+    fn an_older_tmux_listing_becomes_the_same_tree() {
+        // As tmux 3.4 and 3.5a send it: the separator spelled out as `\037`.
+        let old = |fields: &[&str]| fields.join("\\037");
+        let sessions = listing(old(&["$0", "probe"]).as_bytes());
+        let windows = listing(old(&["$0", "@0", "0", "1", "cat"]).as_bytes());
+        let panes = listing(old(&["@0", "%0", "0", "1", "100", "30", "cat", "/home/m", "probe"]).as_bytes());
+        let tree = parse_tree(&sessions, &windows, &panes, "");
+        assert_eq!(tree.len(), 1);
+        assert_eq!(tree[0].name, "probe");
+        assert_eq!(tree[0].windows[0].panes[0].id, "%0");
     }
 
     #[test]
