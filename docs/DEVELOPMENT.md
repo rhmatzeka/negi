@@ -95,3 +95,33 @@ at start; run a second server for tests from a copy of the binary.
 
 The live tests start their own tmux servers on private sockets with `-f /dev/null`, so they
 never touch your sessions, your tmux.conf or its plugins. They need tmux installed.
+
+## Checks on GitHub
+
+Every push and pull request runs `CI` (web lint and build, clippy with warnings as errors,
+the tests, on Apple silicon) and `Security`: `cargo deny check` against `deny.toml`
+(RustSec advisories, licences, crates.io only), `pnpm audit` failing on high and critical,
+and CodeQL on the Rust, the TypeScript and the workflows themselves. Security also runs
+daily. Dependabot opens weekly pull requests for Rust crates, web packages and the
+workflows' actions, which are pinned to commit SHAs.
+
+## Releasing
+
+Bump `version` in `Cargo.toml` and `packaging/npm/package.json`, commit, then push an
+annotated tag whose message is the release notes:
+
+```sh
+git tag -a v0.2.3 -F notes.md && git push origin v0.2.3
+```
+
+The `Release` workflow builds on GitHub's Apple silicon runner with `scripts/release.sh`,
+attests the tarball's provenance (`gh attestation verify <tarball> -R rifuki/negi`), and
+publishes the GitHub release. Each registry is published to once it is set up:
+
+| Registry | Set up once |
+| --- | --- |
+| crates.io | Add a trusted publisher on crates.io for `negi`: repository `rifuki/negi`, workflow `release.yml`. Then the repository variable `PUBLISH_CRATES` = `true`. |
+| npm | Add a trusted publisher on npmjs.com for `@rifuki/negi`: GitHub Actions, `rifuki/negi`, `release.yml`. Then `PUBLISH_NPM` = `true`. |
+| Homebrew | A fine-grained token with contents write on `rifuki/homebrew-tap` only, saved as the secret `HOMEBREW_TAP_TOKEN`. |
+
+`sh scripts/release.sh` still builds the same files locally and publishes nothing.
