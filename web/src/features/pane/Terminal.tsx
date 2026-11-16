@@ -48,9 +48,10 @@ export function Terminal({ pane }: { pane: string }) {
     const el = stage.current;
     if (!screen || !el) return;
     const width = (el.clientWidth - 24) / (screen.cols * columnWidth());
-    const wide = matchMedia("(min-width: 960px)").matches;
     // Sized for the phone, the window has as many columns as fit at this size, so the size is fixed.
-    setSize(fitted ? (fitPx ?? FIT_PX * zoom) : Math.max(9, Math.min(wide ? 16 : 14, width)) * zoom);
+    // As is, a narrow pane would fill the width with larger text than a wide one; it stops at
+    // the fitted size instead, so every pane reads at one size and a narrow one leaves room.
+    setSize(fitted ? (fitPx ?? FIT_PX * zoom) : Math.max(9, Math.min(FIT_PX, width)) * zoom);
   }, [pane, zoom, fitted, fitPx]);
 
   // "Fit": the window in tmux is given as many columns and rows as this box holds, so the
@@ -304,6 +305,8 @@ export function Terminal({ pane }: { pane: string }) {
       ref={stage}
       tabIndex={0}
       onClick={(e) => {
+        // A link a program printed opens in the browser and is not a click for the program.
+        if ((e.target as HTMLElement).closest("a.term-link")) return;
         // A tap is a mouse click for a program that takes the mouse; the server knows whether it
         // does. It does not bring up the keyboard: that has its own button.
         const grid = host.current?.querySelector(".term-screen")?.getBoundingClientRect();

@@ -55,18 +55,64 @@ export function columnWidth(): number {
   return width > 0 ? width : 0.6;
 }
 
+// OSC sequences (a hyperlink, a window title, a prompt mark), ended by BEL or ST. Anser reads
+// only colour sequences and would print the rest of these as text.
+// oxlint-disable-next-line no-control-regex -- matching ESC and BEL is the point
+const OSC = /\x1b\](\d*);?([^\x07\x1b]*)(?:\x07|\x1b\\)/g;
+
+/** A line without its OSC sequences, and the spans of visible text that OSC 8 made links. */
+function links(line: string): { text: string; spans: { from: number; to: number; href: string }[] } {
+  const spans: { from: number; to: number; href: string }[] = [];
+  let text = "";
+  let at = 0;
+  let open: { from: number; href: string } | null = null;
+  for (const m of line.matchAll(OSC)) {
+    text += line.slice(at, m.index);
+    at = m.index + m[0].length;
+    if (m[1] !== "8") continue;
+    const shown = Anser.ansiToText(text).length;
+    if (open) spans.push({ from: open.from, to: shown, href: open.href });
+    // `8;params;uri`: the uri after the parameters' semicolon; an empty one ends the link.
+    const uri = m[2].slice(m[2].indexOf(";") + 1);
+    open = /^https?:\/\//i.test(uri) ? { from: shown, href: uri } : null;
+  }
+  text += line.slice(at);
+  if (open) spans.push({ from: open.from, to: Infinity, href: open.href });
+  return { text, spans };
+}
+
 /** Fills `row` with one captured line. */
 export function paintRow(row: HTMLElement, line: string) {
   row.textContent = "";
-  for (const entry of Anser.ansiToJson(line, { json: true, use_classes: true, remove_empty: true })) {
-    row.append(span(entry));
+  const { text, spans } = links(line);
+  let shown = 0;
+  for (const entry of Anser.ansiToJson(text, { json: true, use_classes: true, remove_empty: true })) {
+    // A coloured run can start or end inside a link: it is cut at the link's edges.
+    let rest = entry.content;
+    while (rest) {
+      const link = spans.find((l) => shown >= l.from && shown < l.to);
+      const next = spans.find((l) => l.from > shown)?.from ?? Infinity;
+      const take = Math.min(rest.length, (link ? link.to : next) - shown);
+      const piece = span({ ...entry, content: rest.slice(0, take) });
+      if (link) {
+        const a = document.createElement("a");
+        a.href = link.href;
+        a.target = "_blank";
+        a.rel = "noopener noreferrer";
+        a.className = "term-link";
+        a.append(piece);
+        row.append(a);
+      } else row.append(piece);
+      rest = rest.slice(take);
+      shown += take;
+    }
   }
   // An empty row still needs a line box, or the screen collapses.
-  if (!row.firstChild) row.append("​");
+  if (!row.firstChild) row.append("\u200b");
 }
 
 /** The text of a captured line with every escape sequence removed. */
-export const plain = (line: string): string => Anser.ansiToText(line);
+export const plain = (line: string): string => Anser.ansiToText(line.replace(OSC, ""));
 
 /** Column, row, shown, and the shape the program asked for ("" when it asked for none). */
 type Cursor = [number, number, boolean, string?];

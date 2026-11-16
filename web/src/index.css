@@ -379,6 +379,17 @@
 .term-row {
   height: 1.25em;
 }
+/* A hyperlink a program printed (OSC 8): it keeps the program's colours and gains an underline. */
+.term-link {
+  color: inherit;
+  text-decoration: none;
+}
+/* On the text itself, so the line takes the text's colour, not the row's. */
+.term-link > span {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
 /* The shape the program asked for, a bar when it asked for none. Block and underline cover
    the glyph's height, not the line's, so the cursor does not stand above the text. */
 .term-cursor {
