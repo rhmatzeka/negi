@@ -101,11 +101,52 @@ pub fn key() -> Option<u8> {
     (unsafe { libc::read(libc::STDIN_FILENO, (&raw mut b).cast(), 1) } == 1).then_some(b)
 }
 
+/// Puts `text` on the clipboard of the terminal in front of the person: pbcopy on this Mac,
+/// otherwise OSC 52, which the terminal at the other end of SSH (or around tmux) carries out.
 pub fn copy(text: &str) -> bool {
     use std::io::Write;
-    let Ok(mut child) = std::process::Command::new("/usr/bin/pbcopy").stdin(std::process::Stdio::piped()).spawn() else {
-        return false;
+    let piped = |program: &str, args: &[&str]| {
+        let Ok(mut child) = std::process::Command::new(program).args(args).stdin(std::process::Stdio::piped()).spawn() else {
+            return false;
+        };
+        let wrote = child.stdin.take().is_some_and(|mut i| i.write_all(text.as_bytes()).is_ok());
+        child.wait().is_ok_and(|s| s.success()) && wrote
     };
-    let wrote = child.stdin.take().is_some_and(|mut i| i.write_all(text.as_bytes()).is_ok());
-    child.wait().is_ok_and(|s| s.success()) && wrote
+    let remote = std::env::var_os("SSH_CONNECTION").is_some() || std::env::var_os("SSH_TTY").is_some();
+    if cfg!(target_os = "macos") && !remote && piped("/usr/bin/pbcopy", &[]) {
+        return true;
+    }
+    // tmux keeps an application's OSC 52 to itself unless set-clipboard is on; -w hands it on.
+    if std::env::var_os("TMUX").is_some() && piped("tmux", &["load-buffer", "-w", "-"]) {
+        return true;
+    }
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open("/dev/tty")
+        .and_then(|mut tty| tty.write_all(format!("\x1b]52;c;{}\x07", base64(text.as_bytes())).as_bytes()))
+        .is_ok()
+}
+
+fn base64(bytes: &[u8]) -> String {
+    const ABC: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for chunk in bytes.chunks(3) {
+        let n = chunk.iter().enumerate().fold(0u32, |n, (i, b)| n | u32::from(*b) << (16 - 8 * i));
+        for i in 0..4 {
+            out.push(if i <= chunk.len() { ABC[(n >> (18 - 6 * i) & 63) as usize] as char } else { '=' });
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::base64;
+
+    #[test]
+    fn base64_matches_the_standard() {
+        for (plain, coded) in [("", ""), ("f", "Zg=="), ("fo", "Zm8="), ("foo", "Zm9v"), ("2KUM-WUT2", "MktVTS1XVVQy")] {
+            assert_eq!(base64(plain.as_bytes()), coded);
+        }
+    }
 }

@@ -862,7 +862,7 @@ dependencies = [
 
 [[package]]
 name = "negi"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "axum",
  "chacha20poly1305",
