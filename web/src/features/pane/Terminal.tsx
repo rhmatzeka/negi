@@ -71,13 +71,16 @@ export function Terminal({ pane }: { pane: string }) {
       if (asked === `${cols}x${rows}`) return;
       asked = `${cols}x${rows}`;
       // Until the window has its new size the screen is the old, wider one; it is kept out
-      // of sight for that moment, so the reflow is not watched.
-      setSettling(true);
+      // of sight for that moment, so the reflow is not watched. Asked again at the size it
+      // already has (after a reconnect), there is no reflow, and nothing is hidden.
+      const now = screenOf(pane);
+      const same = now?.cols === cols && now.rows === rows;
+      if (!same) setSettling(true);
       hush(pane);
       const settled = () => setSettling(false);
       // tmux rewraps what scrolled off to the new width; what was fetched before is too wide.
       request({ t: "fit", pane, cols, rows }).then(
-        () => setTimeout(() => (reload(), settled()), 300),
+        () => !same && setTimeout(() => (reload(), settled()), 300),
         (e: Error) => (settled(), toast.error(e.message)),
       );
     };

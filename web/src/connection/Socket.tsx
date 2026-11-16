@@ -1,6 +1,6 @@
 // The socket itself. Mounted once, at the root; renders nothing.
 
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import * as socketLibrary from "react-use-websocket";
 import { dropped, receive, setSender } from "@/connection/link";
 import { useApp } from "@/lib/store";
@@ -10,6 +10,10 @@ import { useApp } from "@/lib/store";
 const { ReadyState } = socketLibrary;
 const nested = socketLibrary.default as unknown as { default?: typeof socketLibrary.default };
 const useWebSocket = typeof socketLibrary.default === "function" ? socketLibrary.default : nested.default!;
+
+/** How long a hidden page keeps its socket: a look at another app or Space and back costs no
+ * reconnect, while a page left behind lets go, so the Mac keeps no control client for it. */
+const HOLD_HIDDEN_MS = 5 * 60_000;
 
 function usePageVisible(): boolean {
   return useSyncExternalStore(
@@ -23,12 +27,20 @@ function usePageVisible(): boolean {
 
 export function Link() {
   const token = useApp((s) => s.token);
-  // A hidden page holds no socket, so the Mac keeps no control client for it.
   const visible = usePageVisible();
+  const [gone, setGone] = useState(false);
+  useEffect(() => {
+    if (visible) return;
+    const timer = setTimeout(() => setGone(true), HOLD_HIDDEN_MS);
+    return () => {
+      clearTimeout(timer);
+      setGone(false);
+    };
+  }, [visible]);
   const scheme = location.protocol === "https:" ? "wss:" : "ws:";
   // "demo" is the sample-data mode of a development build: there is no socket at all.
   const demo = token === "demo";
-  const url = token && !demo && visible ? `${scheme}//${location.host}/api/ws` : null;
+  const url = token && !demo && (visible || !gone) ? `${scheme}//${location.host}/api/ws` : null;
 
   const { sendJsonMessage, readyState } = useWebSocket(url, {
     onOpen: () => sendJsonMessage({ t: "hello", token: useApp.getState().token }, false),
