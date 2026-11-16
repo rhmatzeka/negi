@@ -26,8 +26,11 @@ curl -fsSL "$base/$name.tar.gz.sha256" -o "$tmp/$name.tar.gz.sha256"
 
 tar -xzf "$tmp/$name.tar.gz" -C "$tmp"
 mkdir -p "$prefix/bin"
-cp "$tmp/negi" "$prefix/bin/negi"
-chmod 755 "$prefix/bin/negi"
+# A new file moved into place, never written over the old one: macOS kills a signed binary
+# whose file was changed in place, and a running negi keeps its own copy until it restarts.
+cp "$tmp/negi" "$prefix/bin/.negi.new"
+chmod 755 "$prefix/bin/.negi.new"
+mv -f "$prefix/bin/.negi.new" "$prefix/bin/negi"
 echo "installed $("$prefix/bin/negi" --version) to $prefix/bin/negi"
 case ":$PATH:" in
   *":$prefix/bin:"*) ;;
