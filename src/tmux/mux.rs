@@ -61,6 +61,9 @@ pub struct Screen {
     pub cx: u16,
     pub cy: u16,
     pub cursor: bool,
+    /// What the program asked for (block, bar, underline); empty before tmux 3.5 or when it
+    /// asked for nothing.
+    pub shape: String,
     /// On the alternate screen (an editor, a full-screen program): there is no history.
     pub alt: bool,
     /// One string per row, with SGR colour sequences as tmux printed them.
@@ -204,7 +207,7 @@ fn parse_tree(sessions: &str, windows: &str, panes: &str, clients: &str) -> Vec<
 pub async fn screen(link: &Link, pane: &str) -> Result<Screen, Error> {
     need('%', pane)?;
     let meta =
-        "#{pane_width} #{pane_height} #{cursor_x} #{cursor_y} #{cursor_flag} #{alternate_on}";
+        "#{pane_width} #{pane_height} #{cursor_x} #{cursor_y} #{cursor_flag} #{alternate_on} #{cursor_shape}";
     let mut replies = link
         .batch(vec![
             format!("display-message -p -t {pane} '{meta}'"),
@@ -214,10 +217,8 @@ pub async fn screen(link: &Link, pane: &str) -> Result<Screen, Error> {
         .into_iter();
     let meta = text(&replies.next().expect("two replies")?);
     let body = replies.next().expect("two replies")?;
-    let n: Vec<u16> = meta
-        .split_whitespace()
-        .map(|v| v.parse().unwrap_or(0))
-        .collect();
+    let words: Vec<&str> = meta.split_whitespace().collect();
+    let n: Vec<u16> = words.iter().take(6).map(|v| v.parse().unwrap_or(0)).collect();
     if n.len() < 6 {
         return Err(Error::Tmux(format!("unexpected pane state {meta:?}")));
     }
@@ -228,6 +229,7 @@ pub async fn screen(link: &Link, pane: &str) -> Result<Screen, Error> {
         cy: n[3],
         cursor: n[4] == 1,
         alt: n[5] == 1,
+        shape: words.get(6).filter(|s| **s != "default").map_or_else(String::new, |s| (*s).to_owned()),
         lines: rows(&body),
     })
 }

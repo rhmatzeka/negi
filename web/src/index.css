@@ -366,17 +366,31 @@
 .term-row {
   height: 1.25em;
 }
+/* The shape the program asked for, a bar when it asked for none. Block and underline cover
+   the glyph's height, not the line's, so the cursor does not stand above the text. */
 .term-cursor {
   position: absolute;
+  /* A bar sits in the gap before its cell, where it cannot read as part of the letter. */
+  left: calc(12px + var(--cx, 0) * 1ch - 1px);
+  top: calc(12px + var(--cy, 0) * 1.25em + 0.125em);
+  width: 2px;
+  height: 1em;
+  border-radius: 1px;
+  background: var(--t-fg);
+  pointer-events: none;
+}
+.term-cursor[data-shape="block"] {
   left: calc(12px + var(--cx, 0) * 1ch);
-  top: calc(12px + var(--cy, 0) * 1.25em);
   width: 1ch;
-  height: 1.25em;
-  border-radius: 2px;
-  /* A terminal's block cursor: the character under it is inverted, not dimmed. */
+  /* The character under it is inverted, not dimmed. */
   background: #e8eaed;
   mix-blend-mode: difference;
-  pointer-events: none;
+}
+.term-cursor[data-shape="underline"] {
+  left: calc(12px + var(--cx, 0) * 1ch);
+  top: calc(12px + var(--cy, 0) * 1.25em + 1.1em);
+  width: 1ch;
+  height: 2px;
 }
 
 /* The working mark: a strip of eight square frames, shown one at a time. Pixel art, so it

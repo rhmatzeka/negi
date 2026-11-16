@@ -71,7 +71,7 @@ pub fn rows_message(pane: &str, screen: &Screen, scroll: usize, set: &[(usize, S
 }
 
 fn cursor(screen: &Screen) -> Value {
-    json!([screen.cx, screen.cy, screen.cursor])
+    json!([screen.cx, screen.cy, screen.cursor, screen.shape])
 }
 
 #[cfg(test)]
@@ -85,6 +85,7 @@ mod tests {
             cx: 0,
             cy: 0,
             cursor: true,
+            shape: String::new(),
             alt: false,
             lines: lines.iter().map(|l| (*l).to_owned()).collect(),
         }

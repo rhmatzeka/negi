@@ -68,16 +68,19 @@ export function paintRow(row: HTMLElement, line: string) {
 /** The text of a captured line with every escape sequence removed. */
 export const plain = (line: string): string => Anser.ansiToText(line);
 
+/** Column, row, shown, and the shape the program asked for ("" when it asked for none). */
+type Cursor = [number, number, boolean, string?];
+
 export interface ScreenMessage {
   cols: number;
   rows: number;
   alt: boolean;
-  cur: [number, number, boolean];
+  cur: Cursor;
   lines: string[];
 }
 
 export interface RowsMessage {
-  cur: [number, number, boolean];
+  cur: Cursor;
   scroll: number;
   set: [number, string][];
 }
@@ -131,7 +134,7 @@ export class Screen {
   }
 
   /** Ends the element under the last row in use, so a fresh shell cannot scroll into empty rows. */
-  private crop([, y]: [number, number, boolean]) {
+  private crop([, y]: Cursor) {
     let used = this.lines.length;
     while (used > 0 && plain(this.lines[used - 1]).trim() === "") used--;
     this.el.style.setProperty("--used", String(Math.max(used, y + 1, 1)));
@@ -151,8 +154,9 @@ export class Screen {
     return row;
   }
 
-  private cursor([x, y, visible]: [number, number, boolean]) {
+  private cursor([x, y, visible, shape]: Cursor) {
     this.cursorEl.hidden = !visible;
+    this.cursorEl.dataset.shape = shape === "block" || shape === "underline" ? shape : "bar";
     this.cursorEl.style.setProperty("--cx", String(x));
     this.cursorEl.style.setProperty("--cy", String(y));
   }
