@@ -13,8 +13,8 @@ export default defineConfig({
       injectRegister: false,
       manifest: {
         id: "/",
-        name: "negi",
-        short_name: "negi",
+        name: "Negi",
+        short_name: "Negi",
         description: "tmux and your Mac's screen, on your phone",
         start_url: "/",
         scope: "/",
